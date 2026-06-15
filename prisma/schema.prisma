@@ -1,0 +1,354 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Flavor {
+  code      String   @id @db.Text
+  name      String   @unique @db.Text
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lots      Lot[]
+  products  Product[]
+
+  @@map("flavors")
+}
+
+model Operator {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @db.Text
+  active    Boolean  @default(true)
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  version   Int      @default(1)
+  lots      Lot[]
+
+  @@map("operators")
+}
+
+model Lot {
+  id               BigInt         @id @default(autoincrement())
+  lotNumber        String         @unique @map("lot_number") @db.Text
+  productionDate   DateTime       @map("production_date") @db.Date
+  productionPeriod String         @map("production_period") @db.Text
+  flavorCode       String         @map("flavor_code") @db.Text
+  sizeMl           Int            @map("size_ml") @db.SmallInt
+  batchNo          Int            @map("batch_no") @db.SmallInt
+  quantity         Int
+  bestBefore       DateTime       @map("best_before") @db.Date
+  operatorId       BigInt         @map("operator_id")
+  operatorName     String         @map("operator_name") @db.Text
+  note             String?        @db.Text
+  status           String         @default("active") @db.Text
+  createdBy        String         @map("created_by") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  voidReason       String?        @map("void_reason") @db.Text
+  voidedBy         String?        @map("voided_by") @db.Uuid
+  voidedAt         DateTime?      @map("voided_at") @db.Timestamptz(6)
+  version          Int            @default(1)
+  flavor           Flavor         @relation(fields: [flavorCode], references: [code])
+  operator         Operator       @relation(fields: [operatorId], references: [id])
+  events           LotEvent[]
+  shipmentItems    ShipmentItem[]
+  orderAllocations  OrderAllocation[]
+
+  @@index([productionDate])
+  @@index([status, productionDate])
+  @@index([flavorCode, sizeMl, productionDate, status])
+  @@index([operatorId])
+  @@map("lots")
+}
+
+model LotEvent {
+  id          BigInt   @id @default(autoincrement())
+  lotId       BigInt   @map("lot_id")
+  eventType   String   @map("event_type") @db.Text
+  reason      String?  @db.Text
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  snapshot    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lot         Lot      @relation(fields: [lotId], references: [id])
+
+  @@index([lotId, createdAt(sort: Desc)])
+  @@map("lot_events")
+}
+
+model Partner {
+  id              BigInt         @id @default(autoincrement())
+  name            String         @db.Text
+  billingName     String?        @map("billing_name") @db.Text
+  taxNumber       String?        @map("tax_number") @db.Text
+  shippingAddress String?        @map("shipping_address") @db.Text
+  contactName     String?        @map("contact_name") @db.Text
+  email           String?        @db.Text
+  phone           String?        @db.Text
+  note            String?        @db.Text
+  active          Boolean        @default(true)
+  createdBy       String         @map("created_by") @db.Uuid
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  version         Int            @default(1)
+  shipments       Shipment[]
+  users           AppUser[]
+  deliveryDays    PartnerDeliveryDay[]
+  orders          Order[]
+
+  @@index([active, name])
+  @@map("partners")
+}
+
+model Shipment {
+  id                  BigInt          @id @default(autoincrement())
+  shipmentNumber      String          @unique @map("shipment_number") @db.Text
+  shipmentYear        Int             @map("shipment_year") @db.SmallInt
+  shipmentSequence    Int             @map("shipment_sequence")
+  partnerId           BigInt          @map("partner_id")
+  shipmentDate        DateTime        @map("shipment_date") @db.Date
+  shippingAddress     String?         @map("shipping_address") @db.Text
+  customerOrderNumber String?         @map("customer_order_number") @db.Text
+  deliveryNoteNumber  String?         @map("delivery_note_number") @db.Text
+  note                String?         @db.Text
+  status              String          @default("draft") @db.Text
+  createdBy           String          @map("created_by") @db.Uuid
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+  closedBy            String?         @map("closed_by") @db.Uuid
+  closedAt            DateTime?       @map("closed_at") @db.Timestamptz(6)
+  shippedBy           String?         @map("shipped_by") @db.Uuid
+  shippedAt           DateTime?       @map("shipped_at") @db.Timestamptz(6)
+  voidedBy            String?         @map("voided_by") @db.Uuid
+  voidedAt            DateTime?       @map("voided_at") @db.Timestamptz(6)
+  voidReason          String?         @map("void_reason") @db.Text
+  version             Int             @default(1)
+  orderId              BigInt?          @map("order_id")
+  partner              Partner          @relation(fields: [partnerId], references: [id])
+  order                Order?           @relation(fields: [orderId], references: [id])
+  items                ShipmentItem[]
+  events               ShipmentEvent[]
+
+  @@unique([shipmentYear, shipmentSequence])
+  @@index([partnerId, shipmentDate(sort: Desc)])
+  @@index([status, shipmentDate(sort: Desc)])
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id         BigInt   @id @default(autoincrement())
+  shipmentId BigInt   @map("shipment_id")
+  lotId      BigInt   @map("lot_id")
+  quantity   Int
+  createdBy  String   @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  version     Int              @default(1)
+  orderItemId BigInt?          @map("order_item_id")
+  shipment   Shipment         @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  lot        Lot              @relation(fields: [lotId], references: [id])
+  orderItem  OrderItem?       @relation(fields: [orderItemId], references: [id])
+  allocation OrderAllocation?
+
+  @@unique([shipmentId, lotId])
+  @@index([lotId])
+  @@index([shipmentId])
+  @@map("shipment_items")
+}
+
+model ShipmentEvent {
+  id          BigInt   @id @default(autoincrement())
+  shipmentId  BigInt   @map("shipment_id")
+  eventType   String   @map("event_type") @db.Text
+  reason      String?  @db.Text
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  snapshot    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, createdAt(sort: Desc)])
+  @@map("shipment_events")
+}
+
+model AppUser {
+  userId      String   @id @map("user_id") @db.Uuid
+  email       String?  @db.Text
+  displayName String?  @map("display_name") @db.Text
+  role        String   @default("staff") @db.Text
+  partnerId   BigInt?  @map("partner_id")
+  active      Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  partner     Partner? @relation(fields: [partnerId], references: [id])
+
+  @@index([role, active])
+  @@map("app_users")
+}
+
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String   @db.Text
+  entityType  String   @map("entity_type") @db.Text
+  entityId    String?  @map("entity_id") @db.Text
+  beforeData  Json?    @map("before_data")
+  afterData   Json?    @map("after_data")
+  requestId   String?  @map("request_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@map("audit_log")
+}
+
+model IdempotencyKey {
+  key          String   @id @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  route        String   @db.Text
+  requestHash  String   @map("request_hash") @db.Text
+  responseCode Int?     @map("response_code")
+  responseBody Json?    @map("response_body")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@index([userId, route])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+model Product {
+  id                 BigInt   @id @default(autoincrement())
+  code               String   @unique @db.Text
+  flavorCode         String   @map("flavor_code") @db.Text
+  sizeMl             Int      @map("size_ml") @db.SmallInt
+  unitsPerCarton     Int      @map("units_per_carton")
+  netUnitPriceHuf    Int      @map("net_unit_price_huf")
+  vatRateBps         Int      @default(2700) @map("vat_rate_bps")
+  active             Boolean  @default(true)
+  sortOrder          Int      @default(0) @map("sort_order")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  version            Int      @default(1)
+  flavor             Flavor   @relation(fields: [flavorCode], references: [code])
+  orderItems         OrderItem[]
+
+  @@unique([flavorCode, sizeMl])
+  @@index([active, sizeMl, sortOrder, code])
+  @@map("products")
+}
+
+model OrderingSetting {
+  singleton           Boolean  @id @default(true)
+  minimumOrderCartons Int      @default(5) @map("minimum_order_cartons")
+  defaultVatRateBps   Int      @default(2700) @map("default_vat_rate_bps")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("ordering_settings")
+}
+
+model PartnerDeliveryDay {
+  id                 BigInt   @id @default(autoincrement())
+  partnerId          BigInt   @map("partner_id")
+  weekday            Int      @db.SmallInt
+  cutoffBusinessDays Int      @default(2) @map("cutoff_business_days") @db.SmallInt
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  partner            Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerId, weekday])
+  @@index([partnerId, active, weekday])
+  @@map("partner_delivery_days")
+}
+
+model Order {
+  id                    BigInt      @id @default(autoincrement())
+  orderNumber           String      @unique @map("order_number") @db.Text
+  orderYear             Int         @map("order_year") @db.SmallInt
+  orderSequence         Int         @map("order_sequence")
+  partnerId             BigInt      @map("partner_id")
+  requestedDeliveryDate DateTime    @map("requested_delivery_date") @db.Date
+  paymentMethod         String?     @map("payment_method") @db.Text
+  status                String      @default("draft") @db.Text
+  totalCartons          Int         @default(0) @map("total_cartons")
+  totalUnits            Int         @default(0) @map("total_units")
+  netTotalHuf           Int         @default(0) @map("net_total_huf")
+  vatTotalHuf           Int         @default(0) @map("vat_total_huf")
+  grossTotalHuf         Int         @default(0) @map("gross_total_huf")
+  note                  String?     @db.Text
+  createdBy             String      @map("created_by") @db.Uuid
+  createdAt             DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  version               Int         @default(1)
+  submittedBy           String?     @map("submitted_by") @db.Uuid
+  submittedAt           DateTime?   @map("submitted_at") @db.Timestamptz(6)
+  approvedBy            String?     @map("approved_by") @db.Uuid
+  approvedAt            DateTime?   @map("approved_at") @db.Timestamptz(6)
+  rejectedBy            String?     @map("rejected_by") @db.Uuid
+  rejectedAt            DateTime?   @map("rejected_at") @db.Timestamptz(6)
+  rejectionReason       String?     @map("rejection_reason") @db.Text
+  voidedBy              String?     @map("voided_by") @db.Uuid
+  voidedAt              DateTime?   @map("voided_at") @db.Timestamptz(6)
+  voidReason            String?     @map("void_reason") @db.Text
+  partner               Partner     @relation(fields: [partnerId], references: [id])
+  items                 OrderItem[]
+  shipments             Shipment[]
+
+  @@unique([orderYear, orderSequence])
+  @@index([partnerId, requestedDeliveryDate(sort: Desc)])
+  @@index([status, requestedDeliveryDate, id])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                       BigInt            @id @default(autoincrement())
+  orderId                  BigInt            @map("order_id")
+  productId                BigInt            @map("product_id")
+  cartons                  Int
+  productCodeSnapshot      String            @map("product_code_snapshot") @db.Text
+  productNameSnapshot      String            @map("product_name_snapshot") @db.Text
+  flavorCodeSnapshot       String            @map("flavor_code_snapshot") @db.Text
+  sizeMlSnapshot           Int               @map("size_ml_snapshot") @db.SmallInt
+  unitsPerCartonSnapshot   Int               @map("units_per_carton_snapshot")
+  netUnitPriceHufSnapshot  Int               @map("net_unit_price_huf_snapshot")
+  vatRateBpsSnapshot       Int               @map("vat_rate_bps_snapshot")
+  unitQuantity             Int               @map("unit_quantity")
+  netTotalHuf              Int               @map("net_total_huf")
+  vatTotalHuf              Int               @map("vat_total_huf")
+  grossTotalHuf            Int               @map("gross_total_huf")
+  createdAt                DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  version                  Int               @default(1)
+  order                    Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product                  Product           @relation(fields: [productId], references: [id])
+  allocations              OrderAllocation[]
+  shipmentItems            ShipmentItem[]
+
+  @@unique([orderId, productId])
+  @@index([orderId, id])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model OrderAllocation {
+  id             BigInt       @id @default(autoincrement())
+  orderItemId    BigInt       @map("order_item_id")
+  lotId          BigInt       @map("lot_id")
+  shipmentItemId BigInt       @unique @map("shipment_item_id")
+  quantity       Int
+  createdBy      String       @map("created_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  orderItem      OrderItem    @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  lot            Lot          @relation(fields: [lotId], references: [id])
+  shipmentItem   ShipmentItem @relation(fields: [shipmentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([orderItemId, lotId, shipmentItemId])
+  @@index([orderItemId])
+  @@index([lotId])
+  @@map("order_allocations")
+}
+

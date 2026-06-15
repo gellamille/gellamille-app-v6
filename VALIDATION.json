@@ -1,0 +1,26 @@
+{
+  "architecture": "single Next.js full-stack application",
+  "deployment_projects": 1,
+  "database_migration": "already verified previously: 13/13 checks",
+  "typecheck": "passed",
+  "production_build": "passed",
+  "unit_tests": "3/3 passed",
+  "routes": {
+    "internal": "/internal",
+    "partner": "/partner",
+    "login": "/login",
+    "health": "/api/health"
+  },
+  "security": {
+    "content_security_policy": "nonce-based",
+    "x_frame_options": "DENY",
+    "frame_ancestors": "none",
+    "authenticated_data_cache": "network-only"
+  },
+  "npm_audit": {
+    "critical": 0,
+    "high": 0,
+    "moderate": 5,
+    "note": "Moderate transitive advisories were reported by npm audit; no high or critical finding."
+  }
+}
