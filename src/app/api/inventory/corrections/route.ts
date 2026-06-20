@@ -7,7 +7,7 @@ import { transaction } from "@/lib/db";
 const schema=z.object({
   lotId:z.number().int().positive(),locationId:z.number().int().positive(),
   movementType:z.enum(["correction","sample","marketing","tasting","internal_use","damage","scrap"]),
-  quantityUnits:z.number().int().nonzero(),reason:z.string().min(5).max(1000)
+  quantityUnits:z.number().int().refine((value)=>value!==0,{message:'Quantity cannot be zero'}),reason:z.string().min(5).max(1000)
 });
 const consumption=new Set(["sample","marketing","tasting","internal_use","damage","scrap"]);
 
