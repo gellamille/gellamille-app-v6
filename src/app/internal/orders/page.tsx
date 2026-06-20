@@ -1,157 +1,50 @@
-import Link from 'next/link';
-import type {
-  OrderDto,
-  OrderStatus,
-  PaginatedResponse,
-} from '@/contracts';
-import { Pagination } from '@/components/pagination';
-import { apiFetch } from '@/lib/api/server';
+import Link from "next/link";
+import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
+import { query } from "@/lib/db";
+import { money, dateHU } from "@/lib/format";
+import { financeStatusLabels, fulfillmentLabels, orderStatusLabels } from "@/lib/status";
 
-export const metadata = { title: 'Rendelések' };
-
-const statusLabels: Record<OrderStatus, string> = {
-  draft: 'Piszkozat',
-  submitted: 'Új',
-  approved: 'Jóváhagyva',
-  stock_shortage: 'Készlethiányos',
-  allocating: 'LOT-kiosztás alatt',
-  shipment_created: 'Szállítmányba rendezve',
-  shipped: 'Kiszállítva',
-  rejected: 'Elutasítva',
-  void: 'Sztornózott',
-};
-
-const paymentLabels: Record<string, string> = {
-  cash_on_delivery: 'Helyszínen készpénz',
-  card_on_delivery: 'Helyszínen kártya',
-  bank_transfer: 'Átutalás',
-};
-
-function money(value: number) {
-  return `${value.toLocaleString('hu-HU')} Ft`;
-}
-
-export default async function OrdersPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const params = await searchParams;
-  const page = Number(params.page ?? 1);
-  const q = typeof params.q === 'string' ? params.q : '';
-  const status = typeof params.status === 'string' ? params.status : '';
-
-  const query = new URLSearchParams({
-    page: String(page),
-    pageSize: '50',
-  });
-  if (q) query.set('q', q);
-  if (status) query.set('status', status);
-
-  const data = await apiFetch<PaginatedResponse<OrderDto>>(
-    `/orders?${query.toString()}`,
-  );
+export default async function OrdersPage() {
+  const orders = await query<any>(`
+    select o.*, p.name as partner_name,
+           coalesce(sum(oi.reserved_quantity),0)::int as reserved_units,
+           coalesce(sum(oi.fulfilled_quantity),0)::int as fulfilled_units
+      from public.orders o
+      join public.partners p on p.id = o.partner_id
+      left join public.order_items oi on oi.order_id = o.id
+     group by o.id, p.name
+     order by o.created_at desc
+     limit 250
+  `);
 
   return (
-    <>
-      <header className="topbar">
-        <div>
-          <h1>Rendelések</h1>
-          <div className="muted small">
-            Partneri rendelések, összegek és feldolgozási állapotok.
-          </div>
-        </div>
-      </header>
-
-      <section className="card">
-        <form className="toolbar" method="get">
-          <div className="toolbar-group">
-            <div>
-              <label htmlFor="q">Keresés</label>
-              <input
-                id="q"
-                name="q"
-                defaultValue={q}
-                placeholder="Rendelésszám vagy partner"
-              />
-            </div>
-            <div>
-              <label htmlFor="status">Státusz</label>
-              <select id="status" name="status" defaultValue={status}>
-                <option value="">Minden státusz</option>
-                {Object.entries(statusLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <button className="button button-secondary" type="submit">
-            Szűrés
-          </button>
-        </form>
-
-        {data.items.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Rendelés</th>
-                  <th>Partner</th>
-                  <th>Szállítás</th>
-                  <th>Karton</th>
-                  <th>Darab</th>
-                  <th>Nettó</th>
-                  <th>Áfa</th>
-                  <th>Bruttó</th>
-                  <th>Fizetés</th>
-                  <th>Státusz</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((order) => (
-                  <tr key={order.id}>
-                    <td>
-                      <Link className="code" href={`/internal/orders/${order.id}`}>
-                        {order.orderNumber}
-                      </Link>
-                    </td>
-                    <td>{order.partnerName}</td>
-                    <td>{order.requestedDeliveryDate}</td>
-                    <td>{order.totalCartons}</td>
-                    <td>{order.totalUnits.toLocaleString('hu-HU')}</td>
-                    <td>{money(order.netTotalHuf)}</td>
-                    <td>{money(order.vatTotalHuf)}</td>
-                    <td><strong>{money(order.grossTotalHuf)}</strong></td>
-                    <td>
-                      {order.paymentMethod
-                        ? paymentLabels[order.paymentMethod]
-                        : '—'}
-                    </td>
-                    <td>
-                      <span className={`badge badge-order-${order.status}`}>
-                        {statusLabels[order.status]}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="empty">
-            Még nincs partner által beküldött rendelés.
-          </div>
-        )}
-
-        <Pagination
-          page={data.page}
-          totalPages={data.totalPages}
-          path="/internal/orders"
-          query={{ q, status }}
-        />
-      </section>
-    </>
+    <div className="page">
+      <PageHeader
+        title="Rendelések"
+        description="A partneri rendelések üzleti, teljesítési és pénzügyi állapota külön követhető."
+        actions={<Link className="button button-primary" href="/internal/orders/new">Belső rendelés rögzítése</Link>}
+      />
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Rendelés</th><th>Partner</th><th>Kért nap</th><th>Rendelési állapot</th><th>Teljesítés</th><th>Pénzügy</th><th>Karton</th><th>Bruttó</th></tr></thead>
+          <tbody>
+            {orders.map((o) => (
+              <tr key={o.id}>
+                <td><Link href={`/internal/orders/${o.id}`} className="mono">{o.order_number}</Link></td>
+                <td>{o.partner_name}</td>
+                <td>{dateHU(o.requested_delivery_date)}</td>
+                <td><StatusBadge value={o.status} label={orderStatusLabels[o.status] ?? o.status} /></td>
+                <td><StatusBadge value={o.fulfillment_status} label={fulfillmentLabels[o.fulfillment_status] ?? o.fulfillment_status} /></td>
+                <td><StatusBadge value={o.finance_status} label={financeStatusLabels[o.finance_status] ?? o.finance_status} /></td>
+                <td>{o.total_cartons}</td>
+                <td>{money(o.gross_total_huf)}</td>
+              </tr>
+            ))}
+            {!orders.length ? <tr><td colSpan={8}>Még nincs rendelés.</td></tr> : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

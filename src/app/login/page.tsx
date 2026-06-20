@@ -1,25 +1,54 @@
-import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/server/auth';
-import { LoginForm } from './login-form';
+"use client";
 
-export const metadata = { title: 'Belépés' };
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-export default async function LoginPage() {
-  const user=await getCurrentUser();
-  if(user?.role==='partner') redirect('/partner/catalog');
-  if(user) redirect('/internal/lots/new');
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+
+    const supabase = createSupabaseBrowserClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      setError("Hibás e-mail-cím vagy jelszó.");
+      setLoading(false);
+      return;
+    }
+
+    router.replace("/");
+    router.refresh();
+  }
+
   return (
-    <main className="login-shell">
-      <section className="card login-card">
-        <div className="brand login-brand">
-          <img src="/icon-192.png" width={54} height={54} alt="Gellamille" />
-          <div>
-            <div className="brand-title">Gellamille</div>
-            <div className="brand-subtitle">Belső és partneri rendszer</div>
-          </div>
-        </div>
-        <h2>Belépés</h2>
-        <LoginForm />
+    <main className="auth-shell">
+      <section className="auth-card">
+        <div className="auth-logo">Gellamille</div>
+        <h1>Belépés</h1>
+        <p>Belső rendszer és partneri rendelési felület.</p>
+        <form onSubmit={submit} className="stack">
+          <label>
+            E-mail-cím
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          </label>
+          <label>
+            Jelszó
+            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          {error ? <div className="alert alert-danger">{error}</div> : null}
+          <button className="button button-primary" disabled={loading}>
+            {loading ? "Belépés…" : "Belépés"}
+          </button>
+        </form>
       </section>
     </main>
   );

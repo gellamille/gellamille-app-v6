@@ -1,42 +1,50 @@
-# Gellamille V6 – egyalkalmazásos rendszer
+# Gellamille V6/V7 – egységes működési rendszer
 
-Egyetlen Next.js alkalmazás, egyetlen GitHub repository és egyetlen Vercel projekt.
+Egyetlen Next.js alkalmazás, egy GitHub repository, egy Vercel projekt és a meglévő Supabase PostgreSQL + Auth.
 
-## Útvonalak
+## Fő útvonalak
 
-- `/internal` – belső LOT-, készlet-, termék-, rendelés-, partner- és szállítmánykezelés
-- `/partner` – partneri termékkatalógus, kosár és rendelési előzmények
-- `/login` – közös belépés, szerepkör alapján automatikus továbbirányítással
-- `/api/health` – adatbázis-kapcsolat ellenőrzése
+- `/internal` – belső vezérlőpult és operáció
+- `/partner` – partneri rendelési felület
+- `/api/health` – telepítési állapot
 
-## Architektúra
+## Beépített működés
 
-```text
-Next.js UI
-  ├─ internal felület
-  ├─ partner felület
-  └─ server-only szolgáltatási réteg
-          ↓
-    Prisma / PostgreSQL
-          ↓
-    meglévő Supabase adatbázis
-```
+- vezérlőpult: rendelések, készlet, lejáratok, követelések, Top 3 termék és partner
+- LOT létrehozás a végleges `FDP15-26-0001` jellegű formátummal
+- LOT létrehozáskor automatikus készletre vétel
+- rendelés kartonban, készlet darabban
+- minimum 5 karton vagy partnerenként felülírt minimum
+- elfogadáskor termékszintű készletfoglalás
+- összekészítéskor FEFO-alapú LOT-kiosztás
+- részleges elfogadás és részleges átadás adatmodellje
+- átadáskor automatikus követelés
+- követelés, beérkezett pénz, ELÁBÉ, árrés és kiadás külön kezelve
+- több raktárhely adatbázis-szinten
+- visszáru, karantén, selejt, visszahívás és leltár adatmodell
+- alapanyagok és verziózott receptek minimális felülete
+- feladatok és alkalmazáson belüli értesítések
+- új rendelésről e-mail a kijelölt címzetteknek
+- szerepkörök: admin, vezetőség, belső munkatárs, gyártás, raktár, pénzügy, értékesítés, partner
+- egy partnerhez egy belépés, több cím és több kapcsolattartó
+- auditnapló és közvetlen böngészős adatbázis-írás tiltása
 
-Nincs Railway, külön API-projekt, Docker vagy CORS-konfiguráció.
+## Technológia
 
-## Telepítés
+- Next.js App Router
+- React
+- Supabase Auth
+- PostgreSQL / Supabase
+- közvetlen szerveroldali `pg` kapcsolat
+- Vercel
+- Resend opcionális e-mail-küldéshez
 
-1. Hozz létre új GitHub repositoryt: `gellamille-app-v6`.
-2. A ZIP tartalmát töltsd fel a repository gyökerébe.
-3. Vercel → Add New → Project → importáld a repositoryt.
-4. Root Directory: `/`.
-5. Add meg a `.env.example` három változóját a Vercel Environment Variables alatt.
-6. Deploy.
-7. Ellenőrizd: `/api/health`.
-8. Supabase Authentication → URL Configuration alatt add hozzá a Vercel URL-t: `https://A-TE-CIMED.vercel.app/**`.
+A pontos telepítési sorrend: [`TELEPITES_LEPESROL_LEPESRE.md`](./TELEPITES_LEPESROL_LEPESRE.md).
 
-## Fontos
+## Adminfelületi lefedettség
 
-A V6 adatbázis-migráció már sikeresen lefutott, ezért a `database/VERIFIED_ALREADY_RAN_006_V5_TO_V6.sql` fájlt ne futtasd újra. Csak dokumentációként maradt a repositoryban.
+Teljes operációs felület készült a vezérlőpulthoz, LOT-létrehozáshoz, készlethez, rendeléshez, partneri rendeléshez, FEFO-kiosztáshoz, átadáshoz, követeléshez, pénzbeérkezéshez, kiadásokhoz, tagi kölcsönhöz, partnerekhez és feladatokhoz.
 
-A működő V5 oldalt addig ne cseréld le, amíg az új V6 oldalt nem tesztelted végig.
+Az alapanyagok, receptek, visszáru, visszahívás, leltár, több raktárhely és szállítási járatok adatbázis-szinten ki vannak építve; az első felületük szándékosan minimális, hogy később külön folyamatként lehessen továbbfejleszteni.
+
+A kiadás ellenőrzési állapota: [`BUILD_REPORT.md`](./BUILD_REPORT.md).

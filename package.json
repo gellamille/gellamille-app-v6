@@ -1,37 +1,34 @@
 {
-  "name": "gellamille-app",
-  "version": "6.0.0",
+  "name": "gellamille-app-v7",
+  "version": "7.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
-    "test": "node --test --import tsx src/server/api/common/utils/date.utils.spec.ts"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@nestjs/common": "^11.1.26",
-    "@nestjs/config": "^4.0.2",
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
-    "@supabase/ssr": "^0.10.3",
-    "@supabase/supabase-js": "^2.108.0",
-    "class-transformer": "^0.5.1",
-    "class-validator": "^0.14.2",
-    "next": "^16.2.9",
-    "pg": "^8.16.3",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.49.4",
+    "lucide-react": "^0.468.0",
+    "next": "^15.2.4",
+    "pg": "^8.13.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@types/node": "^24.3.0",
-    "@types/pg": "^8.15.5",
-    "@types/react": "^19.1.12",
-    "@types/react-dom": "^19.1.9",
-    "prisma": "^7.8.0",
-    "tsx": "^4.20.5",
-    "typescript": "^5.9.3"
+    "@types/node": "^22.13.10",
+    "@types/pg": "^8.11.11",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "eslint": "^9.22.0",
+    "eslint-config-next": "^15.2.4",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -1,120 +1,45 @@
-import { randomUUID } from 'node:crypto';
-import Link from 'next/link';
-import type { PaginatedResponse, PartnerDto, ShipmentDto } from '@/contracts';
-import { Pagination } from '@/components/pagination';
-import { apiFetch } from '@/lib/api/server';
-import { CreateShipmentForm } from './create-shipment-form';
+import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
+import { query } from "@/lib/db";
+import { dateHU } from "@/lib/format";
 
-export const metadata = { title: 'Szállítmányok' };
-
-const statusLabels: Record<string, string> = {
-  draft: 'Piszkozat',
-  closed: 'Lezárt',
-  shipped: 'Kiszállítva',
-  void: 'Sztornózott',
-};
-
-export default async function ShipmentsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const params = await searchParams;
-  const page = Number(params.page ?? 1);
-  const q = typeof params.q === 'string' ? params.q : '';
-  const status = typeof params.status === 'string' ? params.status : '';
-  const query = new URLSearchParams({ page: String(page), pageSize: '50' });
-  if (q) query.set('q', q);
-  if (status) query.set('status', status);
-
-  const [data, partners] = await Promise.all([
-    apiFetch<PaginatedResponse<ShipmentDto>>(`/shipments?${query.toString()}`),
-    apiFetch<PaginatedResponse<PartnerDto>>('/partners?page=1&pageSize=100'),
-  ]);
-
+export default async function ShipmentsPage() {
+  const runs = await query<any>(`
+    select sr.*, count(d.id)::int as delivery_count
+      from public.shipping_runs sr
+      left join public.deliveries d on d.shipping_run_id = sr.id
+     group by sr.id
+     order by sr.planned_date desc, sr.id desc
+     limit 100
+  `);
+  const deliveries = await query<any>(`
+    select d.*, p.name as partner_name, o.order_number
+      from public.deliveries d
+      join public.partners p on p.id = d.partner_id
+      join public.orders o on o.id = d.order_id
+     where d.status not in ('delivered','cancelled')
+     order by d.planned_date, d.sequence_no
+     limit 100
+  `);
   return (
-    <>
-      <header className="topbar">
+    <div className="page">
+      <PageHeader title="Szállítás" description="A szállítás állapota külön kezelendő a rendelés állapotától. Egy járat több partnerhez mehet." />
+      <section className="grid grid-2">
         <div>
-          <h1>Szállítmányok</h1>
-          <div className="muted small">LOT-ok lefoglalása, lezárás és kiszállítás.</div>
+          <h2>Járatok</h2>
+          <div className="table-wrap"><table><thead><tr><th>Járat</th><th>Dátum</th><th>Állapot</th><th>Megálló</th></tr></thead><tbody>
+            {runs.map(r => <tr key={r.id}><td className="mono">{r.run_number}</td><td>{dateHU(r.planned_date)}</td><td><StatusBadge value={r.status} label={r.status} /></td><td>{r.delivery_count}</td></tr>)}
+            {!runs.length ? <tr><td colSpan={4}>Még nincs járat.</td></tr> : null}
+          </tbody></table></div>
         </div>
-      </header>
-
-      <div className="grid-2 shipments-page-grid">
-        <section className="card">
-          <h2>Új szállítmány</h2>
-          {partners.items.length ? (
-            <CreateShipmentForm partners={partners.items} idempotencyKey={randomUUID()} />
-          ) : (
-            <div className="alert alert-warning">Előbb hozz létre legalább egy aktív partnert.</div>
-          )}
-        </section>
-
-        <section className="card">
-          <form className="toolbar" method="get">
-            <div className="toolbar-group">
-              <div>
-                <label htmlFor="q">Keresés</label>
-                <input id="q" name="q" defaultValue={q} placeholder="Szállítmány vagy partner" />
-              </div>
-              <div>
-                <label htmlFor="status">Státusz</label>
-                <select id="status" name="status" defaultValue={status}>
-                  <option value="">Minden státusz</option>
-                  <option value="draft">Piszkozat</option>
-                  <option value="closed">Lezárt</option>
-                  <option value="shipped">Kiszállítva</option>
-                  <option value="void">Sztornózott</option>
-                </select>
-              </div>
-              <button className="button button-secondary" type="submit">Szűrés</button>
-            </div>
-          </form>
-
-          {data.items.length ? (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Szállítmány</th>
-                    <th>Partner</th>
-                    <th>Dátum</th>
-                    <th>LOT</th>
-                    <th>Darabszám</th>
-                    <th>Státusz</th>
-                    <th>Művelet</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((shipment) => (
-                    <tr key={shipment.id} className={shipment.status === 'void' ? 'row-void' : undefined}>
-                      <td className="code">{shipment.shipmentNumber}</td>
-                      <td>{shipment.partnerName}</td>
-                      <td>{shipment.shipmentDate}</td>
-                      <td>{shipment.lotCount}</td>
-                      <td>{shipment.units.toLocaleString('hu-HU')}</td>
-                      <td>
-                        <span className={`badge badge-${shipment.status}`}>
-                          {statusLabels[shipment.status] ?? shipment.status}
-                        </span>
-                      </td>
-                      <td>
-                        <Link className="button button-secondary button-small" href={`/internal/shipments/${shipment.id}`}>
-                          Megnyitás
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="empty">Nincs megjeleníthető szállítmány.</div>
-          )}
-          <Pagination page={data.page} totalPages={data.totalPages} path="/internal/shipments" query={{ q, status }} />
-        </section>
-      </div>
-    </>
+        <div>
+          <h2>Átadásra váró rendelések</h2>
+          <div className="table-wrap"><table><thead><tr><th>Sorrend</th><th>Rendelés</th><th>Partner</th><th>Nap</th><th>Állapot</th></tr></thead><tbody>
+            {deliveries.map(d => <tr key={d.id}><td>{d.sequence_no ?? "—"}</td><td className="mono">{d.order_number}</td><td>{d.partner_name}</td><td>{dateHU(d.planned_date)}</td><td><StatusBadge value={d.status} label={d.status} /></td></tr>)}
+            {!deliveries.length ? <tr><td colSpan={5}>Nincs nyitott átadás.</td></tr> : null}
+          </tbody></table></div>
+        </div>
+      </section>
+    </div>
   );
 }

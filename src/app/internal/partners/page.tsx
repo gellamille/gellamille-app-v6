@@ -1,39 +1,29 @@
-import { randomUUID } from 'node:crypto';
-import Link from 'next/link';
-import type { PaginatedResponse, PartnerDto } from '@/contracts';
-import { Pagination } from '@/components/pagination';
-import { apiFetch } from '@/lib/api/server';
-import { CreatePartnerForm } from './create-partner-form';
+import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
+import { query } from "@/lib/db";
+import { dateHU, money } from "@/lib/format";
+import { NewPartnerForm } from "./NewPartnerForm";
+import { currentAppUser } from "@/lib/auth";
 
-export const metadata = { title: 'Partnerek' };
-
-export default async function PartnersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const params = await searchParams;
-  const page = Number(params.page ?? 1);
-  const q = typeof params.q === 'string' ? params.q : '';
-  const query = new URLSearchParams({ page: String(page), pageSize: '50' });
-  if (q) query.set('q', q);
-  const data = await apiFetch<PaginatedResponse<PartnerDto>>(`/partners?${query.toString()}`);
-
+export default async function PartnersPage() {
+  const user = await currentAppUser();
+  const canWrite = !!user && ["admin","management","sales"].includes(user.role);
+  const partners = await query<any>(`
+    select p.id,p.name,p.email,p.phone,p.active,p.payment_terms_days,
+           p.default_payment_method,p.minimum_order_cartons,p.credit_limit_huf,p.overdue_policy,
+           (select max(o.created_at) from public.orders o where o.partner_id=p.id) as last_order_at,
+           (select coalesce(sum(r.gross_amount_huf),0) from public.receivables r where r.partner_id=p.id and r.status<>'void')::bigint as total_revenue,
+           (select coalesce(sum(v.outstanding_huf),0) from public.v_receivables_open v where v.partner_id=p.id)::bigint as outstanding
+      from public.partners p
+     order by p.name
+  `);
   return (
-    <>
-      <header className="topbar"><div><h1>Partnerek</h1><div className="muted small">Partneradatok és kapcsolódó szállítmányok.</div></div></header>
-      <div className="grid-2">
-        <section className="card"><h2>Új partner</h2><CreatePartnerForm idempotencyKey={randomUUID()} /></section>
-        <section className="card">
-          <form className="toolbar" method="get"><div><label htmlFor="q">Keresés</label><input id="q" name="q" defaultValue={q} placeholder="Partner neve" /></div><button className="button button-secondary" type="submit">Keresés</button></form>
-          {data.items.length ? data.items.map((partner) => (
-            <div className="card embedded-card" key={partner.id}>
-              <div className="toolbar toolbar-compact">
-                <div><h3>{partner.name}</h3><div className="muted small">{partner.shippingAddress || 'Nincs szállítási cím'}<br />{partner.contactName || 'Nincs kapcsolattartó'}</div></div>
-                <Link className="button button-secondary button-small" href={`/internal/partners/${partner.id}`}>Adatlap</Link>
-              </div>
-              <div className="muted small">{partner.shipmentCount ?? 0} szállítmány · {(partner.allocatedUnits ?? 0).toLocaleString('hu-HU')} db hozzárendelve</div>
-            </div>
-          )) : <div className="empty">Még nincs partner.</div>}
-          <Pagination page={data.page} totalPages={data.totalPages} path="/internal/partners" query={{ q }} />
-        </section>
-      </div>
-    </>
+    <div className="page">
+      <PageHeader title="Partnerek" description="Egy partnerhez egy belépés, több szállítási cím és több kapcsolattartó tartozhat." />
+      {canWrite ? <NewPartnerForm /> : null}
+      <div className="table-wrap section-gap"><table><thead><tr><th>Partner</th><th>Kapcsolat</th><th>Fizetés</th><th>Minimum</th><th>Hitelkeret</th><th>Lejárt kezelés</th><th>Utolsó rendelés</th><th>Forgalom</th><th>Követelés</th><th>Állapot</th></tr></thead><tbody>
+        {partners.map(p => <tr key={p.id}><td><strong>{p.name}</strong></td><td>{p.email ?? "—"}<div>{p.phone ?? ""}</div></td><td>{p.default_payment_method ?? "—"} · {p.payment_terms_days} nap</td><td>{p.minimum_order_cartons} karton</td><td>{money(p.credit_limit_huf)}</td><td>{p.overdue_policy === "block" ? "Blokkolás" : "Figyelmeztetés"}</td><td>{dateHU(p.last_order_at)}</td><td>{money(p.total_revenue)}</td><td>{money(p.outstanding)}</td><td><StatusBadge value={p.active ? "active" : "cancelled"} label={p.active ? "Aktív" : "Inaktív"} /></td></tr>)}
+      </tbody></table></div>
+    </div>
   );
 }

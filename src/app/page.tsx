@@ -1,11 +1,8 @@
-import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/server/auth';
+import { redirect } from "next/navigation";
+import { currentAppUser } from "@/lib/auth";
 
-export const dynamic='force-dynamic';
-
-export default async function HomePage(){
-  const user=await getCurrentUser();
-  if(!user) redirect('/login');
-  if(user.role==='partner') redirect('/partner/catalog');
-  redirect('/internal/lots/new');
+export default async function Home() {
+  const user = await currentAppUser();
+  if (!user) { redirect("/login"); throw new Error("Nincs bejelentkezve."); }
+  redirect(user.role === "partner" ? "/partner" : "/internal");
 }

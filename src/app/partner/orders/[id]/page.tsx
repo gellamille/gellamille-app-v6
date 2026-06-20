@@ -1,155 +1,18 @@
-import Link from 'next/link';
-import type {
-  OrderDto,
-  OrderItemDto,
-  OrderStatus,
-} from '@/contracts';
-import { apiFetch } from '@/lib/api/server';
-import { ClearPartnerCart } from './clear-cart';
+import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
+import { requireAppUser } from "@/lib/auth";
+import { one, query } from "@/lib/db";
+import { dateHU, money } from "@/lib/format";
+import { financeStatusLabels, fulfillmentLabels, orderStatusLabels } from "@/lib/status";
+import { WithdrawOrderButton } from "./WithdrawOrderButton";
 
-type OrderDetail = OrderDto & {
-  items: OrderItemDto[];
-};
-
-const statusLabels: Record<OrderStatus, string> = {
-  draft: 'Piszkozat',
-  submitted: 'Beküldve',
-  approved: 'Jóváhagyva',
-  stock_shortage: 'Egyeztetés szükséges',
-  allocating: 'Összekészítés alatt',
-  shipment_created: 'Szállításra előkészítve',
-  shipped: 'Kiszállítva',
-  rejected: 'Elutasítva',
-  void: 'Sztornózott',
-};
-
-const paymentLabels: Record<string, string> = {
-  cash_on_delivery: 'Helyszínen készpénzben',
-  card_on_delivery: 'Helyszínen bankkártyával',
-  bank_transfer: 'Banki átutalással',
-};
-
-function money(value: number) {
-  return `${value.toLocaleString('hu-HU')} Ft`;
-}
-
-export default async function OrderDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<Record<string, string | undefined>>;
-}) {
-  const [{ id }, query] = await Promise.all([
-    params,
-    searchParams,
-  ]);
-
-  const order = await apiFetch<OrderDetail>(
-    `/partner-portal/orders/${id}`,
-  );
-
-  return (
-    <>
-      {query.created === '1' ? <ClearPartnerCart /> : null}
-
-      <header className="page-heading">
-        <div>
-          <h1>{order.orderNumber}</h1>
-          <p>
-            Kért szállítás: {order.requestedDeliveryDate}
-          </p>
-        </div>
-        <span className={`status status-${order.status}`}>
-          {statusLabels[order.status]}
-        </span>
-      </header>
-
-      {query.created === '1' ? (
-        <div className="success-panel">
-          A rendelésedet sikeresen rögzítettük.
-        </div>
-      ) : null}
-
-      <div className="order-detail-grid">
-        <section className="portal-card">
-          <h2>Rendelt termékek</h2>
-          <div className="detail-items">
-            {order.items.map((item) => (
-              <div className="detail-item" key={item.id}>
-                <div>
-                  <strong>{item.productName}</strong>
-                  <span>
-                    {item.sizeMl} ml · {item.cartons} karton ·{' '}
-                    {item.unitQuantity} db
-                  </span>
-                </div>
-                <div>
-                  <span>{money(item.netTotalHuf)} + áfa</span>
-                  <strong>{money(item.grossTotalHuf)}</strong>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <aside className="portal-card order-summary-card">
-          <h2>Összesítés</h2>
-          <dl>
-            <div>
-              <dt>Kartonok</dt>
-              <dd>{order.totalCartons}</dd>
-            </div>
-            <div>
-              <dt>Darabszám</dt>
-              <dd>{order.totalUnits.toLocaleString('hu-HU')}</dd>
-            </div>
-            <div>
-              <dt>Nettó</dt>
-              <dd>{money(order.netTotalHuf)}</dd>
-            </div>
-            <div>
-              <dt>Áfa</dt>
-              <dd>{money(order.vatTotalHuf)}</dd>
-            </div>
-            <div className="gross-row">
-              <dt>Bruttó</dt>
-              <dd>{money(order.grossTotalHuf)}</dd>
-            </div>
-          </dl>
-
-          <div className="summary-block">
-            <span>Fizetési mód</span>
-            <strong>
-              {order.paymentMethod
-                ? paymentLabels[order.paymentMethod]
-                : '—'}
-            </strong>
-          </div>
-
-          {order.note ? (
-            <div className="summary-block">
-              <span>Megjegyzés</span>
-              <strong>{order.note}</strong>
-            </div>
-          ) : null}
-
-          {order.rejectionReason || order.voidReason ? (
-            <div className="alert alert-error">
-              {order.rejectionReason || order.voidReason}
-            </div>
-          ) : null}
-        </aside>
-      </div>
-
-      <div className="page-actions">
-        <Link className="button button-secondary" href="/partner/orders">
-          Vissza a rendelésekhez
-        </Link>
-        <Link className="button button-primary" href="/partner/catalog">
-          Új rendelés
-        </Link>
-      </div>
-    </>
-  );
+export default async function PartnerOrderPage({params}:{params:Promise<{id:string}>}) {
+  const user=await requireAppUser(["partner"]); const {id}=await params;
+  const order=await one<any>(`select * from public.orders where id=$1 and partner_id=$2`,[id,user.partner_id]); if(!order)notFound();
+  const items=await query<any>(`select * from public.order_items where order_id=$1 order by id`,[id]);
+  return <div><PageHeader title={order.order_number} description={`Kért szállítás: ${dateHU(order.requested_delivery_date)}`} actions={order.status === "submitted" ? <WithdrawOrderButton orderId={Number(id)} /> : undefined} />
+    <section className="grid grid-3"><div className="card"><h3>Rendelés</h3><StatusBadge value={order.status} label={orderStatusLabels[order.status]??order.status}/></div><div className="card"><h3>Teljesítés</h3><StatusBadge value={order.fulfillment_status} label={fulfillmentLabels[order.fulfillment_status]??order.fulfillment_status}/></div><div className="card"><h3>Pénzügy</h3><StatusBadge value={order.finance_status} label={financeStatusLabels[order.finance_status]??order.finance_status}/></div></section>
+    <section className="section-gap table-wrap"><table><thead><tr><th>Termék</th><th>Karton</th><th>Darab</th><th>Nettó/db</th><th>Bruttó</th></tr></thead><tbody>{items.map(i=><tr key={i.id}><td>{i.product_name_snapshot}</td><td>{i.cartons}</td><td>{i.unit_quantity}</td><td>{money(i.net_unit_price_huf_snapshot)}</td><td>{money(i.gross_total_huf)}</td></tr>)}</tbody></table></section>
+  </div>;
 }

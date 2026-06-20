@@ -1,100 +1,20 @@
-import type { ProductDto } from '@/contracts';
-import { apiFetch } from '@/lib/api/server';
-import { ProductEditForm } from './product-edit-form';
-
-export const metadata = { title: 'Termékek' };
-
-function money(value: number) {
-  return `${value.toLocaleString('hu-HU')} Ft`;
-}
-
-function ProductTable({
-  title,
-  products,
-}: {
-  title: string;
-  products: ProductDto[];
-}) {
-  return (
-    <section className="card">
-      <h2>{title}</h2>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Termék</th>
-              <th>Kód</th>
-              <th>Karton</th>
-              <th>Nettó darabár</th>
-              <th>Nettó kartonár</th>
-              <th>Áfa</th>
-              <th>Beállítás</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((product) => (
-              <tr key={product.id}>
-                <td>
-                  <strong>{product.flavorName}</strong>
-                  <div className="muted small">{product.sizeMl} ml</div>
-                </td>
-                <td className="code">{product.code}</td>
-                <td>{product.unitsPerCarton} db</td>
-                <td>{money(product.netUnitPriceHuf)} + áfa</td>
-                <td>{money(product.netCartonPriceHuf)} + áfa</td>
-                <td>{product.vatRateBps / 100}%</td>
-                <td>
-                  <ProductEditForm product={product} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
+import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
+import { query } from "@/lib/db";
+import { money } from "@/lib/format";
 
 export default async function ProductsPage() {
-  const products = await apiFetch<ProductDto[]>('/products');
-  const size150 = products.filter((product) => product.sizeMl === 150);
-  const size300 = products.filter((product) => product.sizeMl === 300);
-
+  const products = await query<any>(`
+    select p.*, f.name as flavor_name
+      from public.products p join public.flavors f on f.code=p.flavor_code
+     order by p.size_ml,p.sort_order
+  `);
   return (
-    <>
-      <header className="topbar">
-        <div>
-          <h1>Termékek</h1>
-          <div className="muted small">
-            A rendelési katalógus 16 termékváltozata. Az árváltozás a korábbi
-            rendeléseket nem módosítja.
-          </div>
-        </div>
-      </header>
-
-      <div className="grid-4 stats-spacing">
-        <div className="stat">
-          <div className="stat-label">Aktív termékek</div>
-          <div className="stat-value">
-            {products.filter((product) => product.active).length}
-          </div>
-        </div>
-        <div className="stat">
-          <div className="stat-label">150 ml karton</div>
-          <div className="stat-value">20 db</div>
-        </div>
-        <div className="stat">
-          <div className="stat-label">300 ml karton</div>
-          <div className="stat-value">10 db</div>
-        </div>
-        <div className="stat">
-          <div className="stat-label">Áfakulcs</div>
-          <div className="stat-value">27%</div>
-        </div>
-      </div>
-
-      <ProductTable title="150 ml" products={size150} />
-      <ProductTable title="300 ml" products={size300} />
-    </>
+    <div className="page">
+      <PageHeader title="Termékek" description="16 SKU: 8 íz × 2 kiszerelés. Állapot, kartonlogika, eladási és beszerzési egységár." />
+      <div className="table-wrap"><table><thead><tr><th>SKU</th><th>Terméknév</th><th>Méret</th><th>Karton</th><th>Nettó átadási ár</th><th>Nettó beszerzési ár</th><th>Minimum készlet</th><th>Állapot</th></tr></thead><tbody>
+        {products.map(p => <tr key={p.id}><td className="mono">{p.sku ?? `GM-${p.flavor_code}-${p.size_ml}`}</td><td>{p.name ?? p.flavor_name}</td><td>{p.size_ml} ml</td><td>{p.units_per_carton} db</td><td>{money(p.net_unit_price_huf)}</td><td>{money(p.purchase_unit_price_huf)}</td><td>{p.minimum_stock_units} db</td><td><StatusBadge value={p.status} label={p.status} /></td></tr>)}
+      </tbody></table></div>
+    </div>
   );
 }

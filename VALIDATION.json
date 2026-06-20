@@ -1,26 +1,25 @@
 {
-  "architecture": "single Next.js full-stack application",
-  "deployment_projects": 1,
-  "database_migration": "already verified previously: 13/13 checks",
-  "typecheck": "passed",
-  "production_build": "passed",
-  "unit_tests": "3/3 passed",
-  "routes": {
-    "internal": "/internal",
-    "partner": "/partner",
-    "login": "/login",
-    "health": "/api/health"
-  },
-  "security": {
-    "content_security_policy": "nonce-based",
-    "x_frame_options": "DENY",
-    "frame_ancestors": "none",
-    "authenticated_data_cache": "network-only"
-  },
-  "npm_audit": {
-    "critical": 0,
-    "high": 0,
-    "moderate": 5,
-    "note": "Moderate transitive advisories were reported by npm audit; no high or critical finding."
-  }
+  "project": "gellamille-app-v7",
+  "architecture": "single-nextjs-app",
+  "routes": [
+    "/internal",
+    "/partner",
+    "/api/health"
+  ],
+  "database_prerequisite": "migration 006 applied",
+  "database_migration": "008_v7_unified_operating_system.sql",
+  "database_verification": "009_verify_v7.sql",
+  "product_variants": 16,
+  "minimum_order_cartons_default": 5,
+  "vat_rate_percent": 27,
+  "inventory_base_unit": "piece",
+  "partner_order_unit": "carton",
+  "allocation_rule": "FEFO",
+  "receivable_trigger": "delivery status delivered",
+  "status": "source-package-complete",
+  "typescript_files_parsed": 76,
+  "package_lock_generated": true,
+  "static_checks": "passed",
+  "runtime_build": "not_run_dependency_install_timeout",
+  "deployment_status": "ready_for_local_or_vercel_build"
 }

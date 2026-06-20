@@ -1,84 +1,20 @@
-import Link from 'next/link';
-import type {
-  OrderDto,
-  OrderStatus,
-} from '@/contracts';
-import { apiFetch } from '@/lib/api/server';
+import Link from "next/link";
+import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
+import { requireAppUser } from "@/lib/auth";
+import { query } from "@/lib/db";
+import { dateHU, money } from "@/lib/format";
+import { orderStatusLabels } from "@/lib/status";
 
-export const metadata = { title: 'Rendeléseim' };
-
-const statusLabels: Record<OrderStatus, string> = {
-  draft: 'Piszkozat',
-  submitted: 'Beküldve',
-  approved: 'Jóváhagyva',
-  stock_shortage: 'Egyeztetés szükséges',
-  allocating: 'Összekészítés alatt',
-  shipment_created: 'Szállításra előkészítve',
-  shipped: 'Kiszállítva',
-  rejected: 'Elutasítva',
-  void: 'Sztornózott',
-};
-
-function money(value: number) {
-  return `${value.toLocaleString('hu-HU')} Ft`;
-}
-
-export default async function OrdersPage() {
-  const orders = await apiFetch<OrderDto[]>(
-    '/partner-portal/orders',
-  );
-
+export default async function PartnerOrdersPage() {
+  const user = await requireAppUser(["partner"]);
+  const orders = await query<any>(`select * from public.orders where partner_id=$1 order by created_at desc`, [user.partner_id]);
   return (
-    <>
-      <header className="page-heading">
-        <div>
-          <h1>Rendeléseim</h1>
-          <p>A saját korábbi és folyamatban lévő rendeléseid.</p>
-        </div>
-        <Link className="button button-primary" href="/partner/catalog">
-          Új rendelés
-        </Link>
-      </header>
-
-      <section className="portal-card">
-        {orders.length ? (
-          <div className="order-history">
-            {orders.map((order) => (
-              <Link
-                href={`/orders/${order.id}`}
-                className="history-card"
-                key={order.id}
-              >
-                <div>
-                  <span className="order-number">
-                    {order.orderNumber}
-                  </span>
-                  <strong>{order.requestedDeliveryDate}</strong>
-                  <span>
-                    {order.totalCartons} karton ·{' '}
-                    {order.totalUnits.toLocaleString('hu-HU')} db
-                  </span>
-                </div>
-
-                <div className="history-summary">
-                  <span className={`status status-${order.status}`}>
-                    {statusLabels[order.status]}
-                  </span>
-                  <strong>{money(order.grossTotalHuf)}</strong>
-                </div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state">
-            <h2>Még nincs rendelésed</h2>
-            <p>Az első rendelésedet a termékkatalógusból adhatod le.</p>
-            <Link className="button button-primary" href="/partner/catalog">
-              Rendelés indítása
-            </Link>
-          </div>
-        )}
-      </section>
-    </>
+    <div>
+      <PageHeader title="Rendeléseim" />
+      <div className="table-wrap"><table><thead><tr><th>Rendelés</th><th>Szállítás</th><th>Állapot</th><th>Karton</th><th>Bruttó</th></tr></thead><tbody>
+        {orders.map(o=><tr key={o.id}><td><Link href={`/partner/orders/${o.id}`} className="mono">{o.order_number}</Link></td><td>{dateHU(o.requested_delivery_date)}</td><td><StatusBadge value={o.status} label={orderStatusLabels[o.status]??o.status} /></td><td>{o.total_cartons}</td><td>{money(o.gross_total_huf)}</td></tr>)}
+      </tbody></table></div>
+    </div>
   );
 }
