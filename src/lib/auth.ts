@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, hasSupabaseConfig } from "@/lib/supabase/server";
 import { one } from "@/lib/db";
 
 export type AppUser = {
@@ -13,6 +13,8 @@ export type AppUser = {
 };
 
 export async function currentAppUser(): Promise<AppUser | null> {
+  if (!hasSupabaseConfig()) return null;
+
   const supabase = await createSupabaseServerClient();
   const {
     data: { user }

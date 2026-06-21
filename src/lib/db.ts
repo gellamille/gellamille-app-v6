@@ -1,7 +1,6 @@
 import { Pool, PoolClient, QueryResultRow } from "pg";
 
 declare global {
-  // eslint-disable-next-line no-var
   var gellamillePool: Pool | undefined;
 }
 
@@ -20,17 +19,21 @@ function createPool() {
   });
 }
 
-export const pool = global.gellamillePool ?? createPool();
+export function getPool() {
+  const pool = global.gellamillePool ?? createPool();
 
-if (process.env.NODE_ENV !== "production") {
-  global.gellamillePool = pool;
+  if (process.env.NODE_ENV !== "production") {
+    global.gellamillePool = pool;
+  }
+
+  return pool;
 }
 
 export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
   values: unknown[] = []
 ): Promise<T[]> {
-  const result = await pool.query<T>(text, values);
+  const result = await getPool().query<T>(text, values);
   return result.rows;
 }
 
@@ -45,7 +48,7 @@ export async function one<T extends QueryResultRow = QueryResultRow>(
 export async function transaction<T>(
   callback: (client: PoolClient) => Promise<T>
 ): Promise<T> {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     await client.query("BEGIN");
     const result = await callback(client);

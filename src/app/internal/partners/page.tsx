@@ -3,11 +3,11 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { query } from "@/lib/db";
 import { dateHU, money } from "@/lib/format";
 import { NewPartnerForm } from "./NewPartnerForm";
-import { currentAppUser } from "@/lib/auth";
+import { requireAppUser } from "@/lib/auth";
 
 export default async function PartnersPage() {
-  const user = await currentAppUser();
-  const canWrite = !!user && ["admin","management","sales"].includes(user.role);
+  const user = await requireAppUser(["admin","management","sales","finance"]);
+  const canWrite = ["admin","management","sales"].includes(user.role);
   const partners = await query<any>(`
     select p.id,p.name,p.email,p.phone,p.active,p.payment_terms_days,
            p.default_payment_method,p.minimum_order_cartons,p.credit_limit_huf,p.overdue_policy,

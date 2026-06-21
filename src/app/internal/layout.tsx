@@ -1,6 +1,8 @@
 import { InternalNav } from "@/components/InternalNav";
 import { INTERNAL_ROLES, requireAppUser } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export default async function InternalLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAppUser(INTERNAL_ROLES);
 

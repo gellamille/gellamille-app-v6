@@ -15,7 +15,12 @@ export function CartCheckout({ products, addresses, deliveryDays, minimum, defau
 
   useEffect(() => {
     const raw = localStorage.getItem("gellamille-cart");
-    if (raw) setCart(JSON.parse(raw));
+    if (!raw) return;
+    try {
+      setCart(JSON.parse(raw));
+    } catch {
+      localStorage.removeItem("gellamille-cart");
+    }
   }, []);
 
   const rows = useMemo(() => products.filter((p:any)=>Number(cart[String(p.id)]||0)>0).map((p:any)=>({...p,cartons:Number(cart[String(p.id)])})), [cart,products]);
@@ -31,10 +36,17 @@ export function CartCheckout({ products, addresses, deliveryDays, minimum, defau
   async function submit() {
     setError("");
     const weekday = deliveryDate ? new Date(`${deliveryDate}T12:00:00`).getDay() || 7 : 0;
-    if (!deliveryDays.some((d:any)=>d.weekday===weekday)) return setError("A kiválasztott nap nem engedélyezett szállítási nap.");
+    if (deliveryDays.length && !deliveryDays.some((d:any)=>d.weekday===weekday)) return setError("A kiválasztott nap nem engedélyezett szállítási nap.");
     const response = await fetch("/api/orders", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({requestedDeliveryDate:deliveryDate,paymentMethod,deliveryAddressId:Number(addressId),note,submit:true,items:rows.map((r:any)=>({productId:r.id,cartons:r.cartons}))})
+      body:JSON.stringify({
+        requestedDeliveryDate:deliveryDate,
+        paymentMethod,
+        deliveryAddressId:addressId ? Number(addressId) : undefined,
+        note,
+        submit:true,
+        items:rows.map((r:any)=>({productId:r.id,cartons:r.cartons}))
+      })
     });
     const data=await response.json();
     if(!response.ok) return setError(data.error??"A rendelés beküldése sikertelen.");
@@ -50,7 +62,7 @@ export function CartCheckout({ products, addresses, deliveryDays, minimum, defau
       </tbody></table></div>
       <section className="grid grid-2">
         <div className="card form-grid">
-          <label className="full">Szállítási cím<select value={addressId} onChange={e=>setAddressId(e.target.value)}>{addresses.map((a:any)=><option key={a.id} value={a.id}>{a.name} – {a.postal_code} {a.city}, {a.address_line1}</option>)}</select></label>
+          <label className="full">Szállítási cím<select value={addressId} onChange={e=>setAddressId(e.target.value)} disabled={!addresses.length}>{addresses.length ? addresses.map((a:any)=><option key={a.id} value={a.id}>{a.name} – {a.postal_code} {a.city}, {a.address_line1}</option>) : <option value="">Nincs külön cím rögzítve</option>}</select></label>
           <label>Kért szállítási nap<input type="date" value={deliveryDate} onChange={e=>setDeliveryDate(e.target.value)} /></label>
           <label>Fizetési mód<select value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value)}><option value="bank_transfer">Átutalás</option><option value="cash_on_delivery">Készpénz átadáskor</option><option value="card_on_delivery">Kártya átadáskor</option></select></label>
           <label className="full">Megjegyzés<textarea value={note} onChange={e=>setNote(e.target.value)} /></label>
@@ -60,7 +72,7 @@ export function CartCheckout({ products, addresses, deliveryDays, minimum, defau
           <dl className="kv"><dt>Karton</dt><dd>{totalCartons}</dd><dt>Nettó</dt><dd>{money(net)}</dd><dt>Áfa</dt><dd>{money(vat)}</dd><dt>Bruttó</dt><dd>{money(net+vat)}</dd></dl>
           {totalCartons<minimum?<div className="alert alert-warning section-gap">Még {minimum-totalCartons} karton hiányzik a minimumhoz.</div>:null}
           {error?<div className="alert alert-danger section-gap">{error}</div>:null}
-          <button className="button button-primary section-gap" disabled={!rows.length||totalCartons<minimum||!deliveryDate||!addressId} onClick={submit}>Rendelés beküldése</button>
+          <button className="button button-primary section-gap" disabled={!rows.length||totalCartons<minimum||!deliveryDate||(addresses.length>0&&!addressId)} onClick={submit}>Rendelés beküldése</button>
         </div>
       </section>
     </div>

@@ -3,10 +3,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { one, query } from "@/lib/db";
 import { dateHU, dateTimeHU, money } from "@/lib/format";
+import { INTERNAL_ROLES, requireAppUser } from "@/lib/auth";
 import { financeStatusLabels, fulfillmentLabels, orderStatusLabels } from "@/lib/status";
 import { OrderActions } from "./OrderActions";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAppUser(INTERNAL_ROLES);
+
   const { id } = await params;
   const order = await one<any>(`
     select o.*, p.name as partner_name, p.payment_terms_days,
@@ -111,7 +114,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               <div><strong>{r.receivable_number}</strong><div className="text-muted">Esedékes: {dateHU(r.due_date)}</div></div>
               <div className="right"><strong>{money(r.outstanding_huf)}</strong><div><StatusBadge value={r.status} label={financeStatusLabels[r.status] ?? r.status} /></div></div>
             </div>
-          )) : <div className="empty-state">Követelés csak átadáskor keletkezik.</div>}
+          )) : <div className="empty-state">Követelés az átadás rögzítésekor keletkezik automatikusan.</div>}
         </div>
         <div className="card">
           <h2>Állapottörténet</h2>
