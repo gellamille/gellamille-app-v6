@@ -3,7 +3,6 @@ import { z } from "zod";
 import { apiUser } from "@/lib/api-auth";
 import { apiError } from "@/lib/http";
 import { query, transaction } from "@/lib/db";
-import { processEmailOutbox } from "@/lib/email";
 
 const itemSchema = z.object({
   productId: z.number().int().positive(),
@@ -70,12 +69,17 @@ export async function POST(request: Request) {
         throw new Error(`A minimum rendelés ${partner.minimum_order_cartons} karton.`);
       }
 
-      const deliveryDayResult = await client.query(`
-        select 1 from public.partner_delivery_days
+      const deliveryDayResult = await client.query<{
+        configured_count: number;
+        selected_allowed: boolean;
+      }>(`
+        select count(*)::int as configured_count,
+               coalesce(bool_or(weekday=extract(isodow from $2::date)::int), false) as selected_allowed
+          from public.partner_delivery_days
          where partner_id=$1 and active=true
-           and weekday=extract(isodow from $2::date)::int
       `, [partnerId, input.requestedDeliveryDate]);
-      if (!deliveryDayResult.rowCount) {
+      const deliveryPolicy = deliveryDayResult.rows[0];
+      if (Number(deliveryPolicy?.configured_count ?? 0) > 0 && !deliveryPolicy?.selected_allowed) {
         throw new Error("A kiválasztott dátum nem engedélyezett szállítási nap ennél a partnernél.");
       }
 
@@ -83,7 +87,10 @@ export async function POST(request: Request) {
         const address = await client.query(`select 1 from public.partner_addresses where id=$1 and partner_id=$2 and active=true`, [input.deliveryAddressId, partnerId]);
         if (!address.rowCount) throw new Error("A kiválasztott szállítási cím nem érvényes.");
       } else if (user.role === "partner") {
-        throw new Error("A szállítási cím kiválasztása kötelező.");
+        const addresses = await client.query(`select count(*)::int as count from public.partner_addresses where partner_id=$1 and active=true`, [partnerId]);
+        if (Number(addresses.rows[0]?.count ?? 0) > 0) {
+          throw new Error("A szállítási cím kiválasztása kötelező.");
+        }
       }
 
       const orderResult = await client.query<any>(`
@@ -166,7 +173,6 @@ export async function POST(request: Request) {
       return finalResult.rows[0];
     });
 
-    if (input.submit) await processEmailOutbox(10).catch((error) => console.error("E-mail küldési hiba:", error));
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     return apiError(error, "A rendelés mentése sikertelen.");

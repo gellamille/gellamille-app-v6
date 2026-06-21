@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { one } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const database = await one<{ now: string; migration_008: boolean }>(`

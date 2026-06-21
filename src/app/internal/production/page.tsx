@@ -3,8 +3,11 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { query } from "@/lib/db";
 import { dateHU } from "@/lib/format";
+import { requireAppUser } from "@/lib/auth";
 
 export default async function ProductionPage() {
+  await requireAppUser(["admin", "management", "staff", "production"]);
+
   const lots = await query<any>(`
     select l.id, l.lot_number, l.flavor_code, l.size_ml, l.production_date,
            l.production_period, l.best_before, l.quantity, l.operator_name, l.status,

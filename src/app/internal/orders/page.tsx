@@ -3,9 +3,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { query } from "@/lib/db";
 import { money, dateHU } from "@/lib/format";
+import { INTERNAL_ROLES, requireAppUser } from "@/lib/auth";
 import { financeStatusLabels, fulfillmentLabels, orderStatusLabels } from "@/lib/status";
 
 export default async function OrdersPage() {
+  await requireAppUser(INTERNAL_ROLES);
+
   const orders = await query<any>(`
     select o.*, p.name as partner_name,
            coalesce(sum(oi.reserved_quantity),0)::int as reserved_units,

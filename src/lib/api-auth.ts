@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, hasSupabaseConfig } from "@/lib/supabase/server";
 import { one } from "@/lib/db";
 import type { AppUser } from "@/lib/auth";
 
@@ -8,6 +8,10 @@ type ApiAuthResult =
   | { error: null; user: AppUser };
 
 export async function apiUser(allowedRoles?: string[]): Promise<ApiAuthResult> {
+  if (!hasSupabaseConfig()) {
+    return { error: NextResponse.json({ error: "A Supabase kapcsolat nincs beállítva." }, { status: 503 }), user: null };
+  }
+
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { money } from "@/lib/format";
 
 type Cart = Record<string, number>;
@@ -11,7 +12,12 @@ export function Catalog({ products }: { products: any[] }) {
 
   useEffect(() => {
     const raw = localStorage.getItem("gellamille-cart");
-    if (raw) setCart(JSON.parse(raw));
+    if (!raw) return;
+    try {
+      setCart(JSON.parse(raw));
+    } catch {
+      localStorage.removeItem("gellamille-cart");
+    }
   }, []);
 
   function add(productId: number, cartons: number) {
@@ -26,6 +32,12 @@ export function Catalog({ products }: { products: any[] }) {
   return (
     <>
       {saved ? <div className="alert alert-success">{saved}</div> : null}
+      {Object.values(cart).some((quantity) => quantity > 0) ? (
+        <div className="card-title-row">
+          <h2>Kosárban: {Object.values(cart).reduce((sum, quantity) => sum + quantity, 0)} karton</h2>
+          <Link href="/partner/cart" className="button button-primary">Rendelés véglegesítése</Link>
+        </div>
+      ) : null}
       <div className="product-grid section-gap">
         {products.map(p => <Product key={p.id} product={p} add={add} />)}
       </div>
@@ -45,7 +57,7 @@ function Product({ product, add }: { product: any; add: (id:number, cartons:numb
       <div className="product-carton">Szabad készlet: {product.available_units} db</div>
       <div className="quantity-row">
         <label>Karton<input type="number" min="1" value={qty} onChange={(e)=>setQty(Number(e.target.value))} /></label>
-        <button className="button button-primary" onClick={()=>add(product.id,qty)}>Kosárba</button>
+        <button className="button button-primary" disabled={qty < 1} onClick={()=>add(product.id,qty)}>Kosárba</button>
       </div>
     </article>
   );

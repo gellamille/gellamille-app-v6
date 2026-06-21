@@ -1,8 +1,7 @@
 import Link from "next/link";
 import {
-  Boxes, ClipboardList, Factory, LayoutDashboard, PackageCheck, Truck,
-  WalletCards, Users, ListTodo, FlaskConical, ChartNoAxesCombined,
-  Settings, LogOut, IceCreamBowl
+  Boxes, ClipboardList, Factory, LayoutDashboard, PackageCheck,
+  Users, LogOut
 } from "lucide-react";
 
 const nav = [
@@ -10,14 +9,7 @@ const nav = [
   ["/internal/orders", "Rendelések", ClipboardList, ["admin","management","staff","sales","warehouse","finance"]],
   ["/internal/production", "Gyártás és LOT", Factory, ["admin","management","staff","production"]],
   ["/internal/inventory", "Készlet", Boxes, ["admin","management","staff","production","warehouse"]],
-  ["/internal/shipments", "Szállítás", Truck, ["admin","management","staff","warehouse","sales"]],
-  ["/internal/finance", "Pénzügy", WalletCards, ["admin","management","finance"]],
-  ["/internal/partners", "Partnerek", Users, ["admin","management","sales","finance"]],
-  ["/internal/tasks", "Feladatok", ListTodo, ["admin","management","staff","sales"]],
-  ["/internal/materials", "Alapanyagok", FlaskConical, ["admin","management","staff","production"]],
-  ["/internal/products", "Termékek", IceCreamBowl, ["admin","management","staff","production","sales"]],
-  ["/internal/analytics", "Elemzések", ChartNoAxesCombined, ["admin","management","sales","finance"]],
-  ["/internal/settings", "Beállítások", Settings, ["admin"]]
+  ["/internal/partners", "Partnerek", Users, ["admin","management","sales","finance"]]
 ] as const;
 
 export function InternalNav({ role }: { role: string }) {

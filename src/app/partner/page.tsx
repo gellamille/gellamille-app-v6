@@ -5,6 +5,7 @@ import { one, query } from "@/lib/db";
 import { dateHU, money } from "@/lib/format";
 import { StatusBadge } from "@/components/StatusBadge";
 import { orderStatusLabels } from "@/lib/status";
+import { Catalog } from "./catalog/Catalog";
 
 export default async function PartnerDashboardPage() {
   const user = await requireAppUser(["partner"]);
@@ -18,14 +19,35 @@ export default async function PartnerDashboardPage() {
     select id, order_number, requested_delivery_date, status, gross_total_huf
       from public.orders where partner_id=$1 order by created_at desc limit 5
   `, [user.partner_id]);
+  const products = await query<any>(`
+    select p.id,p.code,p.sku,p.name,p.size_ml,p.units_per_carton,p.vat_rate_bps,p.status,
+           coalesce(
+             (select pli.net_unit_price_huf from public.price_list_items pli
+               join public.price_lists pl on pl.id=pli.price_list_id
+              where pli.product_id=p.id and pl.active=true and current_date>=pl.valid_from
+                and (pl.valid_to is null or current_date<=pl.valid_to)
+                and (pl.id=$2 or (pl.type='general' and pl.organization_id=$1))
+              order by case when pl.id=$2 then 0 else 1 end,pl.valid_from desc limit 1),
+             p.net_unit_price_huf
+           )::int as net_unit_price_huf,
+           coalesce(s.available_units,0)::int as available_units
+      from public.products p
+      left join public.v_product_stock_summary s on s.product_id=p.id
+     where p.organization_id=$1 and p.active=true and p.status in ('active','seasonal')
+     order by p.size_ml,p.sort_order
+  `,[user.organization_id,partner?.price_list_id??null]);
 
   return (
     <div>
-      <PageHeader title={partner?.name ?? "Partneri felület"} description="Rendelés kartonban, a jóváhagyott szállítási napokra." actions={<Link href="/partner/catalog" className="button button-primary">Új rendelés</Link>} />
+      <PageHeader title="Partneri rendelő" description={partner?.name ?? "Rendelés kartonban, a jóváhagyott szállítási napokra."} actions={<Link href="/partner/cart" className="button button-primary">Kosár megnyitása</Link>} />
       <section className="grid grid-3">
         <div className="card metric"><div className="metric-label">Nyitott követelés</div><div className="metric-value">{money(partner?.outstanding)}</div></div>
         <div className="card metric"><div className="metric-label">Minimum rendelés</div><div className="metric-value">{partner?.minimum_order_cartons ?? 5} karton</div></div>
         <div className="card metric"><div className="metric-label">Fizetési határidő</div><div className="metric-value">{partner?.payment_terms_days ?? 0} nap</div></div>
+      </section>
+      <section className="section-gap">
+        <div className="card-title-row"><h2>Termékek</h2><Link href="/partner/catalog" className="button button-small">Katalógus oldal</Link></div>
+        <Catalog products={products} />
       </section>
       <section className="section-gap">
         <div className="card-title-row"><h2>Legutóbbi rendelések</h2><Link href="/partner/orders" className="button button-small">Összes</Link></div>

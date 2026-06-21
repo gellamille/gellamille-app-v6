@@ -16,6 +16,12 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+      setError("A Supabase kapcsolat nincs beállítva ehhez a környezethez.");
+      setLoading(false);
+      return;
+    }
+
     const supabase = createSupabaseBrowserClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 

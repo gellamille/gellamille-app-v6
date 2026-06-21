@@ -44,7 +44,7 @@ export function OrderActions({
         <button className="button" disabled={busy} onClick={() => action("allocate_fefo")}>FEFO összekészítés</button>
       ) : null}
       {fulfillmentStatus === "packed" || fulfillmentStatus === "partially_delivered" ? (
-        <button className="button button-primary" disabled={busy} onClick={() => action("deliver_all")}>Átadás rögzítése</button>
+        <button className="button button-primary" disabled={busy} onClick={() => action("deliver_all")}>Átadás és követelés</button>
       ) : null}
       {message ? <span className="text-danger">{message}</span> : null}
     </div>
