@@ -36,7 +36,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
       const orderResult = await client.query<OrderRow>(`
         select id,organization_id,partner_id,status,fulfillment_status,requested_delivery_date,delivery_address_id
-          from public.orders where id=$1 for update
+          from public.orders where id=$1 and archived_at is null for update
       `, [orderId]);
       const order = orderResult.rows[0];
       if (!order || order.organization_id !== user.organization_id) throw new Error("A rendelés nem található.");
@@ -177,10 +177,24 @@ async function allocateFefo(client: any, order: OrderRow, userId: string) {
 async function deliverAll(client: any, order: OrderRow, userId: string) {
   if (!["packed", "partially_delivered"].includes(order.fulfillment_status)) throw new Error("Csak összekészített rendelés adható át.");
   const locationId = await centralLocation(client, order.organization_id);
-  const deliveryResult = await client.query(`
-    insert into public.deliveries(organization_id,order_id,partner_id,address_id,planned_date,status,created_by)
-    values($1,$2,$3,$4,$5,'planned',$6) returning *
-  `, [order.organization_id, order.id, order.partner_id, order.delivery_address_id, order.requested_delivery_date, userId]);
+  const existingDelivery = await client.query(`
+    select * from public.deliveries
+     where order_id=$1 and organization_id=$2 and status not in ('delivered','cancelled')
+       and archived_at is null
+     order by shipping_run_id nulls last, created_at desc
+     limit 1
+     for update
+  `, [order.id, order.organization_id]);
+  const deliveryResult = existingDelivery.rows[0]
+    ? await client.query(`
+        update public.deliveries
+           set partner_id=$2,address_id=$3,planned_date=coalesce(planned_date,$4),status=case when status='planned' then 'planned' else status end
+         where id=$1 returning *
+      `, [existingDelivery.rows[0].id, order.partner_id, order.delivery_address_id, order.requested_delivery_date])
+    : await client.query(`
+        insert into public.deliveries(organization_id,order_id,partner_id,address_id,planned_date,status,created_by)
+        values($1,$2,$3,$4,$5,'planned',$6) returning *
+      `, [order.organization_id, order.id, order.partner_id, order.delivery_address_id, order.requested_delivery_date, userId]);
   const delivery = deliveryResult.rows[0];
   const items = await client.query(`select * from public.order_items where order_id=$1 order by id for update`, [order.id]);
   let deliveredTotal = 0;

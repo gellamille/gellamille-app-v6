@@ -50,9 +50,9 @@ export async function POST(request: Request) {
       if (input.type === "payment") {
         const receivableResult = await client.query<any>(`
           select r.id,r.partner_id,r.organization_id,v.outstanding_huf
-            from public.receivables r
+           from public.receivables r
             join public.v_receivables_open v on v.id=r.id
-           where r.id=$1 and r.status<>'void'
+           where r.id=$1 and r.status<>'void' and r.archived_at is null
            for update of r
         `, [input.receivableId]);
         const receivable = receivableResult.rows[0];

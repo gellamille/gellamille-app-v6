@@ -1,5 +1,7 @@
 import { PageHeader } from "@/components/PageHeader";
 import { query } from "@/lib/db";
+import { DataArchiveForm } from "./DataArchiveForm";
+import { UserCreateForm } from "./UserCreateForm";
 
 export default async function SettingsPage() {
   const users = await query<any>(`
@@ -11,6 +13,10 @@ export default async function SettingsPage() {
   return (
     <div className="page">
       <PageHeader title="Beállítások és jogosultságok" description="A gyártási dolgozó csak a gyártás, LOT, készlet és alapanyag területeket látja." />
+      <UserCreateForm />
+      <section className="section-gap">
+        <DataArchiveForm />
+      </section>
       <section className="grid grid-2">
         <div>
           <h2>Felhasználók</h2>

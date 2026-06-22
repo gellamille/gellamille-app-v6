@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
 
-export function CartCheckout({ products, addresses, deliveryDays, minimum, defaultPayment }: any) {
+export function CartCheckout({ products, addresses, deliveryDays, minimum, defaultPayment, blockedReason }: any) {
   const router = useRouter();
   const [cart, setCart] = useState<Record<string, number>>({});
   const [addressId, setAddressId] = useState(addresses[0]?.id ? String(addresses[0].id) : "");
@@ -35,8 +35,17 @@ export function CartCheckout({ products, addresses, deliveryDays, minimum, defau
 
   async function submit() {
     setError("");
+    if (blockedReason) return setError(blockedReason);
     const weekday = deliveryDate ? new Date(`${deliveryDate}T12:00:00`).getDay() || 7 : 0;
-    if (deliveryDays.length && !deliveryDays.some((d:any)=>d.weekday===weekday)) return setError("A kiválasztott nap nem engedélyezett szállítási nap.");
+    const deliveryPolicy = deliveryDays.find((d:any)=>d.weekday===weekday);
+    if (deliveryDays.length && !deliveryPolicy) return setError("A kiválasztott nap nem engedélyezett szállítási nap.");
+    if (deliveryPolicy?.cutoff_business_days) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const latestOrderDate = new Date(`${deliveryDate}T00:00:00`);
+      latestOrderDate.setDate(latestOrderDate.getDate() - Number(deliveryPolicy.cutoff_business_days));
+      if (today > latestOrderDate) return setError(`Erre a szállítási napra a rendelési zárás már lejárt (${deliveryPolicy.cutoff_business_days} naptári nap).`);
+    }
     const response = await fetch("/api/orders", {
       method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
@@ -71,8 +80,9 @@ export function CartCheckout({ products, addresses, deliveryDays, minimum, defau
           <h2>Összesítés</h2>
           <dl className="kv"><dt>Karton</dt><dd>{totalCartons}</dd><dt>Nettó</dt><dd>{money(net)}</dd><dt>Áfa</dt><dd>{money(vat)}</dd><dt>Bruttó</dt><dd>{money(net+vat)}</dd></dl>
           {totalCartons<minimum?<div className="alert alert-warning section-gap">Még {minimum-totalCartons} karton hiányzik a minimumhoz.</div>:null}
+          {blockedReason?<div className="alert alert-danger section-gap">{blockedReason} A kosarat összeállíthatod, de beküldeni most nem lehet.</div>:null}
           {error?<div className="alert alert-danger section-gap">{error}</div>:null}
-          <button className="button button-primary section-gap" disabled={!rows.length||totalCartons<minimum||!deliveryDate||(addresses.length>0&&!addressId)} onClick={submit}>Rendelés beküldése</button>
+          <button className="button button-primary section-gap" disabled={!!blockedReason||!rows.length||totalCartons<minimum||!deliveryDate||(addresses.length>0&&!addressId)} onClick={submit}>Rendelés beküldése</button>
         </div>
       </section>
     </div>

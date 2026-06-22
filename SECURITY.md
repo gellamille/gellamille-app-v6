@@ -6,4 +6,4 @@
 - Minden kritikus művelet auditálható.
 - LOT, rendelés, készletmozgás és pénzügyi esemény nem törlendő véglegesen.
 - A cron végpontot `CRON_SECRET` védi.
-- A Supabase service-role kulcsra nincs szükség a frontendben, és nem kerülhet `NEXT_PUBLIC_` változóba.
+- A Supabase service-role kulcs kizárólag szerveroldali admin műveletekhez használható, és nem kerülhet `NEXT_PUBLIC_` változóba.

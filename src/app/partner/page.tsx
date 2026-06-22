@@ -10,14 +10,18 @@ import { Catalog } from "./catalog/Catalog";
 export default async function PartnerDashboardPage() {
   const user = await requireAppUser(["partner"]);
   const partner = await one<any>(`
-    select p.*, coalesce(sum(v.outstanding_huf),0)::bigint as outstanding
+    select p.*,
+           coalesce(sum(v.outstanding_huf),0)::bigint as outstanding,
+           coalesce(sum(v.outstanding_huf) filter (where v.due_date < current_date),0)::bigint as overdue_amount,
+           (select string_agg(case d.weekday when 1 then 'Hétfő' when 2 then 'Kedd' when 3 then 'Szerda' when 4 then 'Csütörtök' when 5 then 'Péntek' when 6 then 'Szombat' else 'Vasárnap' end, ', ' order by d.weekday)
+              from public.partner_delivery_days d where d.partner_id=p.id and d.active=true) as delivery_days
       from public.partners p
       left join public.v_receivables_open v on v.partner_id=p.id
      where p.id=$1 group by p.id
   `, [user.partner_id]);
   const orders = await query<any>(`
     select id, order_number, requested_delivery_date, status, gross_total_huf
-      from public.orders where partner_id=$1 order by created_at desc limit 5
+      from public.orders where partner_id=$1 and archived_at is null order by created_at desc limit 5
   `, [user.partner_id]);
   const products = await query<any>(`
     select p.id,p.code,p.sku,p.name,p.size_ml,p.units_per_carton,p.vat_rate_bps,p.status,
@@ -36,14 +40,27 @@ export default async function PartnerDashboardPage() {
      where p.organization_id=$1 and p.active=true and p.status in ('active','seasonal')
      order by p.size_ml,p.sort_order
   `,[user.organization_id,partner?.price_list_id??null]);
+  const blocked = partner?.overdue_policy === "block" && Number(partner?.overdue_amount ?? 0) > 0;
 
   return (
     <div>
       <PageHeader title="Partneri rendelő" description={partner?.name ?? "Rendelés kartonban, a jóváhagyott szállítási napokra."} actions={<Link href="/partner/cart" className="button button-primary">Kosár megnyitása</Link>} />
+      {blocked ? <div className="alert alert-danger section-gap">A rendelésleadás lejárt tartozás miatt blokkolva van. A kosár használható, de beküldeni most nem lehet.</div> : null}
       <section className="grid grid-3">
         <div className="card metric"><div className="metric-label">Nyitott követelés</div><div className="metric-value">{money(partner?.outstanding)}</div></div>
         <div className="card metric"><div className="metric-label">Minimum rendelés</div><div className="metric-value">{partner?.minimum_order_cartons ?? 5} karton</div></div>
         <div className="card metric"><div className="metric-label">Fizetési határidő</div><div className="metric-value">{partner?.payment_terms_days ?? 0} nap</div></div>
+      </section>
+      <section className="section-gap card">
+        <h2>Céges adatok</h2>
+        <dl className="kv">
+          <dt>Számlázási név</dt><dd>{partner?.billing_name ?? partner?.name ?? "—"}</dd>
+          <dt>Adószám</dt><dd>{partner?.tax_number ?? "—"}</dd>
+          <dt>Kapcsolat</dt><dd>{partner?.email ?? "—"} {partner?.phone ? `· ${partner.phone}` : ""}</dd>
+          <dt>Szállítási cím</dt><dd>{partner?.shipping_address ?? "—"}</dd>
+          <dt>Szállítási nap</dt><dd>{partner?.delivery_days ?? "—"}</dd>
+          <dt>Fizetési mód</dt><dd>{partner?.default_payment_method ?? "—"}</dd>
+        </dl>
       </section>
       <section className="section-gap">
         <div className="card-title-row"><h2>Termékek</h2><Link href="/partner/catalog" className="button button-small">Katalógus oldal</Link></div>

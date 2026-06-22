@@ -67,6 +67,7 @@ button { cursor: pointer; }
 }
 .sidebar nav a:hover, .nav-button:hover { background: rgba(255,255,255,.08); color: #fff; }
 .sidebar-bottom { margin-top: auto; }
+.nav-badge { margin-left: auto; min-width: 20px; height: 20px; border-radius: 999px; background: #d9473f; color: white; display: inline-grid; place-items: center; padding: 0 6px; font-size: 11px; font-weight: 900; }
 
 .content { min-width: 0; }
 .topbar {
@@ -126,6 +127,7 @@ table { border-collapse: collapse; width: 100%; min-width: 760px; }
 th, td { padding: 13px 14px; border-bottom: 1px solid #ecefeb; text-align: left; font-size: 13px; vertical-align: top; }
 th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; background: var(--surface-soft); }
 tr:last-child td { border-bottom: 0; }
+.table-wrap input[type="checkbox"] { width: auto; }
 
 .button {
   border: 1px solid var(--line);
@@ -230,6 +232,26 @@ textarea { min-height: 95px; resize: vertical; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .section-gap { margin-top: 24px; }
 .right { text-align: right; }
+.filter-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
+.filter-actions { align-self: end; }
+.temporary-password { display: grid; gap: 6px; background: #eef6f1; border: 1px solid #cfe4d6; color: #28583c; border-radius: 10px; padding: 12px; font-size: 13px; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(31,42,37,.42); display: grid; place-items: center; padding: 22px; }
+.modal-panel { width: min(860px, 100%); max-height: min(88vh, 820px); overflow: auto; background: white; border: 1px solid var(--line); border-radius: 14px; padding: 22px; box-shadow: 0 24px 70px rgba(31,42,37,.24); }
+.checkbox-group { border: 1px solid #cfd6d1; border-radius: 10px; padding: 11px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.checkbox-group legend { color: var(--muted); font-size: 12px; font-weight: 800; padding: 0 6px; }
+.checkbox-group label { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: 13px; }
+.checkbox-group input { width: auto; }
+.checkbox-line { display: flex; align-items: flex-start; gap: 9px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.checkbox-line input { width: auto; margin-top: 2px; }
+.details-summary { cursor: pointer; font-weight: 850; }
+.notification-menu { position: relative; }
+.notification-menu summary { list-style: none; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 800; }
+.notification-menu summary::-webkit-details-marker { display: none; }
+.notification-panel { position: absolute; right: 0; top: calc(100% + 12px); width: min(420px, 88vw); max-height: 520px; overflow: auto; background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 20px 60px rgba(31,42,37,.18); padding: 12px; z-index: 50; }
+.notification-item { padding: 10px 8px; border-bottom: 1px solid #edf0ed; display: grid; gap: 4px; }
+.notification-item:last-child { border-bottom: 0; }
+.notification-item small { color: var(--muted); }
+.recipe-row { display: grid; grid-template-columns: minmax(180px, 2fr) minmax(110px, 1fr) minmax(92px, .7fr) auto; gap: 10px; align-items: end; }
 
 @media (max-width: 1150px) {
   .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -244,6 +266,9 @@ textarea { min-height: 95px; resize: vertical; }
   .page { padding: 24px 18px 50px; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
+  .filter-bar { grid-template-columns: 1fr; }
+  .checkbox-group { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .recipe-row { grid-template-columns: 1fr; }
   .partner-nav { align-items: flex-start; padding: 14px 4vw; }
   .partner-nav nav { flex-wrap: wrap; justify-content: flex-end; }
 }

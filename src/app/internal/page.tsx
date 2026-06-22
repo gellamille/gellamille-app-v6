@@ -20,9 +20,9 @@ export default async function DashboardPage() {
 
   const metrics = await one<Metrics>(`
     select
-      (select count(*)::int from public.orders where status = 'submitted') as submitted_orders,
-      (select count(*)::int from public.orders where status in ('approved','partially_approved','stock_shortage')) as accepted_orders,
-      (select count(*)::int from public.orders where fulfillment_status in ('packed','partially_delivered')) as packed_orders,
+      (select count(*)::int from public.orders where status = 'submitted' and archived_at is null) as submitted_orders,
+      (select count(*)::int from public.orders where status in ('approved','partially_approved','stock_shortage') and archived_at is null) as accepted_orders,
+      (select count(*)::int from public.orders where fulfillment_status in ('packed','partially_delivered') and archived_at is null) as packed_orders,
       (select count(*)::int from public.v_product_stock_summary where available_units < minimum_stock_units) as low_stock_products,
       (select count(*)::int from public.lots where status = 'active') as active_lots,
       (select coalesce(sum(outstanding_huf),0)::bigint from public.v_receivables_open) as receivables_huf
@@ -33,8 +33,11 @@ export default async function DashboardPage() {
            o.requested_delivery_date, o.gross_total_huf, p.name as partner_name
       from public.orders o
       join public.partners p on p.id = o.partner_id
-     where o.status in ('submitted','approved','partially_approved','stock_shortage')
+     where o.archived_at is null
+       and (
+        o.status in ('submitted','approved','partially_approved','stock_shortage')
         or o.fulfillment_status in ('packed','partially_delivered')
+       )
      order by o.created_at desc
      limit 8
   `);
@@ -65,12 +68,12 @@ export default async function DashboardPage() {
       />
 
       <section className="grid grid-3">
-        <div className="card metric"><div className="metric-label">Beérkezett rendelés</div><div className="metric-value">{m.submitted_orders}</div><div className="metric-note">Elfogadásra vár</div></div>
-        <div className="card metric"><div className="metric-label">Elfogadott rendelés</div><div className="metric-value">{m.accepted_orders}</div><div className="metric-note">Foglalás vagy készlethiány alatt</div></div>
-        <div className="card metric"><div className="metric-label">Átadásra kész</div><div className="metric-value">{m.packed_orders}</div><div className="metric-note">Összekészített rendelés</div></div>
-        <div className="card metric"><div className="metric-label">Aktív LOT</div><div className="metric-value">{m.active_lots}</div><div className="metric-note">Eladható életciklusban</div></div>
-        <div className="card metric"><div className="metric-label">Alacsony készlet</div><div className="metric-value">{m.low_stock_products}</div><div className="metric-note">Minimumszint alatt</div></div>
-        <div className="card metric"><div className="metric-label">Nyitott követelés</div><div className="metric-value">{money(m.receivables_huf)}</div><div className="metric-note">Átadáskor keletkezik</div></div>
+        <Link href="/internal/orders?status=submitted" className="card metric"><div className="metric-label">Beérkezett rendelés</div><div className="metric-value">{m.submitted_orders}</div><div className="metric-note">Elfogadásra vár</div></Link>
+        <Link href="/internal/orders?status=approved" className="card metric"><div className="metric-label">Elfogadott rendelés</div><div className="metric-value">{m.accepted_orders}</div><div className="metric-note">Foglalás vagy készlethiány alatt</div></Link>
+        <Link href="/internal/orders?fulfillment=packed" className="card metric"><div className="metric-label">Átadásra kész</div><div className="metric-value">{m.packed_orders}</div><div className="metric-note">Összekészített rendelés</div></Link>
+        <Link href="/internal/production" className="card metric"><div className="metric-label">Aktív LOT</div><div className="metric-value">{m.active_lots}</div><div className="metric-note">Eladható életciklusban</div></Link>
+        <Link href="/internal/inventory" className="card metric"><div className="metric-label">Alacsony készlet</div><div className="metric-value">{m.low_stock_products}</div><div className="metric-note">Minimumszint alatt</div></Link>
+        <Link href="/internal/finance" className="card metric"><div className="metric-label">Nyitott követelés</div><div className="metric-value">{money(m.receivables_huf)}</div><div className="metric-note">Átadáskor keletkezik</div></Link>
       </section>
 
       <section className="grid grid-2 section-gap">

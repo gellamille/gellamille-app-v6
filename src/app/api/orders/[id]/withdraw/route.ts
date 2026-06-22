@@ -16,7 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const orderId = Number(id);
     const order = await transaction(async (client) => {
       await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
-      const current = await client.query<any>(`select * from public.orders where id=$1 and partner_id=$2 for update`, [orderId, user.partner_id]);
+      const current = await client.query<any>(`select * from public.orders where id=$1 and partner_id=$2 and archived_at is null for update`, [orderId, user.partner_id]);
       if (!current.rows[0]) throw new Error("A rendelés nem található.");
       if (current.rows[0].status !== "submitted") throw new Error("Csak a még el nem fogadott rendelés vonható vissza.");
       const updated = await client.query<any>(`

@@ -8,7 +8,9 @@ export async function processEmailOutbox(limit = 20) {
   const queue = await query<any>(`
     with selected as (
       select id from public.email_outbox
-       where (status='queued' or (status='processing' and processing_started_at<now()-interval '15 minutes')) and attempts<5
+       where (status='queued' or (status='processing' and processing_started_at<now()-interval '15 minutes'))
+         and attempts<5
+         and archived_at is null
        order by created_at
        for update skip locked
        limit $1

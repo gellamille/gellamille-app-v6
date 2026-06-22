@@ -3,9 +3,20 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { query } from "@/lib/db";
 import { dateHU } from "@/lib/format";
 import { requireAppUser } from "@/lib/auth";
+import { InventoryAdjustmentForm } from "./InventoryAdjustmentForm";
+
+const lotStatusLabels: Record<string, string> = {
+  active: "Aktív",
+  depleted: "Elfogyott",
+  recalled: "Visszahívott / selejt",
+  scrapped: "Selejt",
+  expired: "Lejárt",
+  void: "Sztornózott",
+};
 
 export default async function InventoryPage() {
-  await requireAppUser(["admin", "management", "staff", "production", "warehouse"]);
+  const user = await requireAppUser(["admin", "management", "staff", "production", "warehouse"]);
+  const canAdjust = ["admin", "management", "warehouse"].includes(user.role);
 
   const products = await query<any>(`
     select *
@@ -23,16 +34,27 @@ export default async function InventoryPage() {
       join public.products p on p.flavor_code = l.flavor_code and p.size_ml = l.size_ml
       left join public.v_lot_stock_summary v on v.lot_id = l.id
      where l.status in ('active','depleted')
+        or (l.status in ('recalled','scrapped','expired') and coalesce(v.physical_units,0) <> 0)
      order by l.best_before, l.id
      limit 250
   `);
+  const correctionLots = canAdjust ? await query<any>(`
+    select l.id,l.lot_number,p.name as product_name,coalesce(v.physical_units,0)::int as physical_units
+      from public.lots l
+      join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml
+      left join public.v_lot_stock_summary v on v.lot_id=l.id
+     where l.status='active'
+     order by l.best_before,l.id
+  `) : [];
+  const locations = canAdjust ? await query<any>(`select id,name from public.inventory_locations where active order by name`) : [];
 
   return (
     <div className="page">
       <PageHeader
         title="Készletlista"
-        description="V7.1 MVP: termékszintű és LOT-szintű szabad készlet. Korrekció, leltár és visszáru nincs kitéve a felületen."
+        description="Termékszintű és LOT-szintű szabad készlet. A kézi korrekció indoklással, auditálható készletmozgásként történik."
       />
+      {canAdjust ? <InventoryAdjustmentForm lots={correctionLots} locations={locations} /> : null}
 
       <section>
         <h2>Termékkészlet</h2>
@@ -74,7 +96,7 @@ export default async function InventoryPage() {
                 <td>{l.physical_units} db</td>
                 <td>{l.allocated_units} db</td>
                 <td><strong>{l.available_units} db</strong></td>
-                <td><StatusBadge value={l.status} label={l.status === "active" ? "Aktív" : "Elfogyott"} /></td>
+                <td><StatusBadge value={l.status} label={lotStatusLabels[l.status] ?? l.status} /></td>
               </tr>
             ))}</tbody>
           </table>
