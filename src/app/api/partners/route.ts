@@ -26,6 +26,23 @@ const schema = z.object({
   note: z.string().max(2000).optional().default("")
 });
 
+const updateSchema = schema.extend({
+  id: z.number().int().positive(),
+  active: z.boolean().default(true),
+  creditLimitHuf: z.number().int().min(0).max(999999999).optional().default(0)
+});
+
+const deleteSchema = z.object({
+  id: z.number().int().positive(),
+  reason: z.string().min(5).max(1000),
+  confirm: z.literal(true)
+});
+
+function deliveryWeekdaysFromInput(input: z.infer<typeof schema>) {
+  const weekdays = input.deliveryWeekdays?.length ? input.deliveryWeekdays : input.deliveryWeekday ? [input.deliveryWeekday] : [];
+  return [...new Set(weekdays)].sort((a, b) => a - b);
+}
+
 export async function POST(request: Request) {
   const auth=await apiUser(["admin","management","sales"]);
   if(auth.error||!auth.user) return auth.error??NextResponse.json({error:"Nincs jogosultság."},{status:401});
@@ -39,7 +56,7 @@ export async function POST(request: Request) {
   try{
     const input=schema.parse(await request.json());
     const accountEmail = input.email.trim().toLowerCase();
-    const deliveryWeekdays = input.deliveryWeekdays?.length ? input.deliveryWeekdays : input.deliveryWeekday ? [input.deliveryWeekday] : [];
+    const deliveryWeekdays = deliveryWeekdaysFromInput(input);
     if (!deliveryWeekdays.length) throw new Error("Legalább egy szállítási nap kiválasztása kötelező.");
 
     const temporaryPassword = generateTemporaryPassword();
@@ -106,5 +123,194 @@ export async function POST(request: Request) {
       await createSupabaseAdminClient().auth.admin.deleteUser(createdUserId).catch(() => undefined);
     }
     return apiError(error,"A partner létrehozása sikertelen.");
+  }
+}
+
+export async function PATCH(request: Request) {
+  const auth = await apiUser(["admin", "management", "sales"]);
+  if (auth.error || !auth.user) return auth.error ?? NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
+  const user = auth.user;
+
+  try {
+    const input = updateSchema.parse(await request.json());
+    const accountEmail = input.email.trim().toLowerCase();
+    const deliveryWeekdays = deliveryWeekdaysFromInput(input);
+    if (!deliveryWeekdays.length) throw new Error("Legalább egy szállítási nap kiválasztása kötelező.");
+
+    const result = await transaction(async (client) => {
+      await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
+      const beforeResult = await client.query<any>(`
+        select * from public.partners
+         where id=$1 and organization_id=$2 and archived_at is null
+         for update
+      `, [input.id, user.organization_id]);
+      const before = beforeResult.rows[0];
+      if (!before) throw new Error("A partner nem található.");
+
+      const duplicatePartner = await client.query(`
+        select 1 from public.partners
+         where lower(trim(name))=lower(trim($1)) and id<>$2 and archived_at is null
+         limit 1
+      `, [input.name, input.id]);
+      if (duplicatePartner.rowCount) throw new Error("Már létezik ilyen nevű partner.");
+
+      const duplicateUser = await client.query(`
+        select 1 from public.app_users
+         where lower(email)=lower($1)
+           and not (role='partner' and partner_id=$2)
+         limit 1
+      `, [accountEmail, input.id]);
+      if (duplicateUser.rowCount) throw new Error("Már létezik ilyen e-mail-című felhasználó.");
+
+      const partnerUser = await client.query<{ user_id: string; email: string | null }>(`
+        select user_id,email from public.app_users
+         where role='partner' and partner_id=$1
+         order by created_at desc
+         limit 1
+      `, [input.id]);
+
+      if (partnerUser.rows[0] && partnerUser.rows[0].email?.toLowerCase() !== accountEmail && !hasSupabaseAdminConfig()) {
+        throw new Error("A Supabase admin kulcs nincs beállítva, ezért a partneri belépési e-mail nem módosítható.");
+      }
+      if (partnerUser.rows[0] && partnerUser.rows[0].email?.toLowerCase() !== accountEmail) {
+        const { error } = await createSupabaseAdminClient().auth.admin.updateUserById(partnerUser.rows[0].user_id, {
+          email: accountEmail,
+          email_confirm: true,
+          user_metadata: { display_name: input.contactName || input.name }
+        });
+        if (error) throw new Error(error.message);
+      }
+
+      const shippingAddress = `${input.postalCode} ${input.city}, ${input.addressLine1}`;
+      const updated = await client.query<any>(`
+        update public.partners set
+          name=$2,
+          billing_name=$3,
+          tax_number=$4,
+          shipping_address=$5,
+          contact_name=$6,
+          email=$7,
+          phone=$8,
+          note=$9,
+          active=$10,
+          default_payment_method=$11,
+          payment_terms_days=$12,
+          minimum_order_cartons=$13,
+          credit_limit_huf=$14,
+          overdue_policy=$15,
+          updated_at=now()
+        where id=$1 and organization_id=$16 and archived_at is null
+        returning *
+      `, [
+        input.id, input.name.trim(), input.billingName || null, input.taxNumber || null,
+        shippingAddress, input.contactName || null, accountEmail, input.phone || null,
+        input.note || null, input.active, input.paymentMethod, input.paymentTermsDays,
+        input.minimumOrderCartons, input.creditLimitHuf ?? 0, input.overduePolicy, user.organization_id
+      ]);
+
+      const addressUpdate = await client.query(`
+        update public.partner_addresses
+           set postal_code=$2,city=$3,address_line1=$4,is_default=true,active=true,updated_at=now()
+         where id=(
+           select id from public.partner_addresses
+            where partner_id=$1 and active=true
+            order by is_default desc,id
+            limit 1
+         )
+      `, [input.id, input.postalCode, input.city, input.addressLine1]);
+      if (!addressUpdate.rowCount) {
+        await client.query(`
+          insert into public.partner_addresses(partner_id,name,postal_code,city,address_line1,is_default,active)
+          values($1,'Fő üzlet',$2,$3,$4,true,true)
+        `, [input.id, input.postalCode, input.city, input.addressLine1]);
+      }
+
+      if (input.contactName) {
+        const contactUpdate = await client.query(`
+          update public.partner_contacts
+             set name=$2,email=$3,phone=$4,active=true
+           where id=(
+             select id from public.partner_contacts
+              where partner_id=$1 and active=true
+              order by id
+              limit 1
+           )
+        `, [input.id, input.contactName, accountEmail, input.phone || null]);
+        if (!contactUpdate.rowCount) {
+          await client.query(`
+            insert into public.partner_contacts(partner_id,name,role_type,email,phone)
+            values($1,$2,'general',$3,$4)
+          `, [input.id, input.contactName, accountEmail, input.phone || null]);
+        }
+      }
+
+      await client.query(`update public.partner_delivery_days set active=false where partner_id=$1`, [input.id]);
+      for (const weekday of deliveryWeekdays) {
+        await client.query(`
+          insert into public.partner_delivery_days(partner_id,weekday,cutoff_business_days,active)
+          values($1,$2,$3,true)
+          on conflict(partner_id,weekday) do update set cutoff_business_days=excluded.cutoff_business_days,active=true,updated_at=now()
+        `, [input.id, weekday, input.cutoffBusinessDays]);
+      }
+
+      await client.query(`
+        update public.app_users
+           set email=$2,display_name=$3,active=$4,organization_id=$5
+         where role='partner' and partner_id=$1
+      `, [input.id, accountEmail, input.contactName || input.name, input.active, user.organization_id]);
+
+      await client.query(`
+        insert into public.audit_log(actor_user_id,action,entity_type,entity_id,before_data,after_data)
+        values($1,'partner.updated','partner',$2,$3::jsonb,$4::jsonb)
+      `, [user.user_id, String(input.id), JSON.stringify(before), JSON.stringify(updated.rows[0])]);
+
+      return updated.rows[0];
+    });
+
+    return NextResponse.json({ partner: result });
+  } catch (error) {
+    return apiError(error, "A partner mentése sikertelen.");
+  }
+}
+
+export async function DELETE(request: Request) {
+  const auth = await apiUser(["admin", "management"]);
+  if (auth.error || !auth.user) return auth.error ?? NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
+  const user = auth.user;
+
+  try {
+    const input = deleteSchema.parse(await request.json());
+    const result = await transaction(async (client) => {
+      await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
+      const beforeResult = await client.query<any>(`
+        select * from public.partners
+         where id=$1 and organization_id=$2 and archived_at is null
+         for update
+      `, [input.id, user.organization_id]);
+      const before = beforeResult.rows[0];
+      if (!before) throw new Error("A partner nem található.");
+
+      const archived = await client.query<any>(`
+        update public.partners
+           set active=false, archived_at=now(), note=concat_ws(E'\n', note, $3)
+         where id=$1 and organization_id=$2 and archived_at is null
+         returning *
+      `, [input.id, user.organization_id, `Archiválva: ${input.reason.trim()}`]);
+
+      await client.query(`update public.app_users set active=false where role='partner' and partner_id=$1`, [input.id]);
+      await client.query(`update public.partner_addresses set active=false where partner_id=$1`, [input.id]);
+      await client.query(`update public.partner_contacts set active=false where partner_id=$1`, [input.id]);
+      await client.query(`update public.partner_delivery_days set active=false where partner_id=$1`, [input.id]);
+      await client.query(`
+        insert into public.audit_log(actor_user_id,action,entity_type,entity_id,before_data,after_data)
+        values($1,'partner.archived','partner',$2,$3::jsonb,$4::jsonb)
+      `, [user.user_id, String(input.id), JSON.stringify(before), JSON.stringify({ reason: input.reason.trim(), partner: archived.rows[0] })]);
+
+      return archived.rows[0];
+    });
+
+    return NextResponse.json({ partner: result });
+  } catch (error) {
+    return apiError(error, "A partner törlése sikertelen.");
   }
 }
