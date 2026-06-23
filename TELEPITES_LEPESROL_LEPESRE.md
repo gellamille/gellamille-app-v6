@@ -10,17 +10,23 @@ A meglévő Supabase adatbázisban a V6 `006` migráció már lefutott. A csomag
 
 A migráció előtt készíts adatbázis-mentést a Supabase felületén.
 
-## 2. V7 adatbázis-migráció
+## 2. V7 adatbázis-migrációk
 
 Supabase → SQL Editor → New query.
 
-Másold be és futtasd egyben:
+Először másold be és futtasd egyben:
 
 ```text
 database/migrations/008_v7_unified_operating_system.sql
 ```
 
-Siker esetén a tranzakció `commit`-tal zárul.
+Ezután futtasd a V7.1 kiegészítő migrációt is:
+
+```text
+database/migrations/009_v7_1_recipe_nutrition_and_archiving.sql
+```
+
+Mindkét migráció siker esetén `commit`-tal zárul. A 009 additív: receptúra tápértékmezőket, soft-archive mezőket és archiválási naplót ad hozzá, adatot nem töröl.
 
 ## 3. Ellenőrzés
 
@@ -108,6 +114,7 @@ Vercel → Add New → Project → importáld a repositoryt.
 ```text
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SERVICE_ROLE_KEY
 DATABASE_URL
 CRON_SECRET
 RESEND_API_KEY
@@ -116,6 +123,8 @@ APP_URL
 ```
 
 A `DATABASE_URL` értéke a Supabase Transaction Pooler kapcsolati URI-ja legyen. Jelszót ne tölts fel GitHubra.
+
+A `SUPABASE_SERVICE_ROLE_KEY` csak szerveroldali Vercel környezeti változó lehet. Ezzel hoz létre az admin felület Supabase Auth felhasználót; böngészőbe vagy `NEXT_PUBLIC_` változóba nem kerülhet.
 
 Az e-mailhez:
 

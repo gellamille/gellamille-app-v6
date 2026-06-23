@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { one, query } from "@/lib/db";
@@ -18,7 +19,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       from public.orders o
       join public.partners p on p.id = o.partner_id
       left join public.partner_addresses pa on pa.id = o.delivery_address_id
-     where o.id = $1
+     where o.id = $1 and o.archived_at is null
   `, [id]);
   if (!order) notFound();
 
@@ -41,13 +42,21 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const receivables = await query<any>(`
     select * from public.v_receivables_open where order_id = $1 order by delivered_at desc
   `, [id]);
+  const lotAllocations = await query<any>(`
+    select a.id,a.quantity_units,a.status,a.delivered_at,l.lot_number,l.best_before,oi.product_name_snapshot
+      from public.order_item_lot_allocations a
+      join public.lots l on l.id=a.lot_id
+      join public.order_items oi on oi.id=a.order_item_id
+     where oi.order_id=$1
+     order by oi.id,l.best_before,l.lot_number
+  `, [id]);
 
   return (
     <div className="page">
       <PageHeader
         title={order.order_number}
         description={`${order.partner_name} · ${dateHU(order.requested_delivery_date)}`}
-        actions={<OrderActions orderId={Number(id)} status={order.status} fulfillmentStatus={order.fulfillment_status} />}
+        actions={<><OrderActions orderId={Number(id)} status={order.status} fulfillmentStatus={order.fulfillment_status} /><Link className="button button-danger" href={`/internal/recalls?orderId=${id}`}>Visszahívás</Link></>}
       />
       <section className="grid grid-3">
         <div className="card">
@@ -104,6 +113,30 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="section-gap">
+        <details className="card">
+          <summary className="details-summary">LOT követés</summary>
+          <div className="table-wrap section-gap-small">
+            <table>
+              <thead><tr><th>Termék</th><th>LOT</th><th>Lejárat</th><th>Mennyiség</th><th>Állapot</th><th>Átadva</th></tr></thead>
+              <tbody>
+                {lotAllocations.map((allocation) => (
+                  <tr key={allocation.id}>
+                    <td>{allocation.product_name_snapshot}</td>
+                    <td className="mono">{allocation.lot_number}</td>
+                    <td>{dateHU(allocation.best_before)}</td>
+                    <td>{allocation.quantity_units} db</td>
+                    <td><StatusBadge value={allocation.status} label={allocation.status} /></td>
+                    <td>{dateTimeHU(allocation.delivered_at)}</td>
+                  </tr>
+                ))}
+                {!lotAllocations.length ? <tr><td colSpan={6}>Még nincs LOT hozzárendelés ehhez a rendeléshez.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </details>
       </section>
 
       <section className="grid grid-2 section-gap">

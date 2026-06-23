@@ -8,12 +8,12 @@ import { FinanceEntryForms } from "./FinanceEntryForms";
 export default async function FinancePage() {
   const totals = await one<any>(`
     select
-      (select coalesce(sum(gross_amount_huf),0) from public.receivables where status<>'void') as revenue,
+      (select coalesce(sum(gross_amount_huf),0) from public.receivables where status<>'void' and archived_at is null) as revenue,
       (select coalesce(sum(outstanding_huf),0) from public.v_receivables_open) as outstanding,
       (select coalesce(sum(outstanding_huf),0) from public.v_receivables_open where due_date < current_date) as overdue,
-      (select coalesce(sum(amount_huf),0) from public.payments) as received,
-      (select coalesce(sum(gross_amount_huf),0) from public.expenses where status <> 'void') as expenses,
-      (select coalesce(sum(cogs_huf),0) from public.delivery_items di join public.deliveries d on d.id=di.delivery_id where d.status='delivered') as cogs,
+      (select coalesce(sum(amount_huf),0) from public.payments where archived_at is null) as received,
+      (select coalesce(sum(gross_amount_huf),0) from public.expenses where status <> 'void' and archived_at is null) as expenses,
+      (select coalesce(sum(cogs_huf),0) from public.delivery_items di join public.deliveries d on d.id=di.delivery_id where d.status='delivered' and d.archived_at is null) as cogs,
       (select coalesce(sum(outstanding_huf),0) from public.v_member_loan_balances) as member_loans
   `);
   const receivables = await query<any>(`select * from public.v_receivables_open order by due_date, id limit 250`);
@@ -21,7 +21,7 @@ export default async function FinancePage() {
   const expenses = await query<any>(`
     select e.*, ec.name as category_name
       from public.expenses e left join public.expense_categories ec on ec.id=e.category_id
-     where e.status <> 'void' order by e.performance_date desc,e.id desc limit 100
+     where e.status <> 'void' and e.archived_at is null order by e.performance_date desc,e.id desc limit 100
   `);
   const loans = await query<any>(`
     select * from public.member_loan_transactions

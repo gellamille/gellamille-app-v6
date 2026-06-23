@@ -10,14 +10,16 @@ export default async function AnalyticsPage() {
       from public.delivery_items di
       join public.order_items oi on oi.id=di.order_item_id
       join public.deliveries d on d.id=di.delivery_id and d.status='delivered'
+     where d.archived_at is null
      group by oi.product_name_snapshot
      order by units desc
   `);
   const partners = await query<any>(`
     select p.name,
-           (select coalesce(sum(r.gross_amount_huf),0) from public.receivables r where r.partner_id=p.id and r.status<>'void')::bigint as revenue,
+           (select coalesce(sum(r.gross_amount_huf),0) from public.receivables r where r.partner_id=p.id and r.status<>'void' and r.archived_at is null)::bigint as revenue,
            (select coalesce(sum(v.outstanding_huf),0) from public.v_receivables_open v where v.partner_id=p.id)::bigint as outstanding
       from public.partners p
+     where p.archived_at is null
      order by revenue desc
   `);
   return (

@@ -11,14 +11,11 @@ export function NewLotForm({ products, operators }: { products: any[]; operators
   const [quantity, setQuantity] = useState("");
   const [operatorId, setOperatorId] = useState("");
   const [note, setNote] = useState("");
-  const [purchasePrice, setPurchasePrice] = useState("");
   const [error, setError] = useState("");
   const selected = useMemo(() => products.find(p => String(p.id) === productId), [products, productId]);
 
   function choose(value: string) {
     setProductId(value);
-    const p = products.find(item => String(item.id) === value);
-    setPurchasePrice(String(p?.purchase_unit_price_huf ?? ""));
   }
 
   async function submit() {
@@ -33,8 +30,7 @@ export function NewLotForm({ products, operators }: { products: any[]; operators
         productionPeriod: period,
         quantity: Number(quantity),
         operatorId: Number(operatorId),
-        note,
-        purchaseUnitPriceHuf: Number(purchasePrice || 0)
+        note
       })
     });
     const data = await response.json();
@@ -56,7 +52,6 @@ export function NewLotForm({ products, operators }: { products: any[]; operators
         <label>Gyártási időszak<select value={period} onChange={(e) => setPeriod(e.target.value)}><option value="AM">Délelőtt (AM)</option><option value="PM">Délután (PM)</option></select></label>
         <label>Gyártott darabszám<input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></label>
         <label>Felelős<select value={operatorId} onChange={(e) => setOperatorId(e.target.value)}><option value="">Válassz felelőst</option>{operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
-        <label>Beszerzési egységár (nettó Ft)<input type="number" min="0" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} /></label>
         <label>Várható LOT-formátum<input disabled value={selected ? `${selected.code.slice(0,3)}${selected.size_ml === 150 ? "15" : "30"}-${productionDate.slice(2,4)}-####` : ""} /></label>
         <label className="full">Megjegyzés<textarea value={note} onChange={(e) => setNote(e.target.value)} /></label>
       </div>

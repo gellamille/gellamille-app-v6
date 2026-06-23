@@ -5,7 +5,14 @@ import { CartCheckout } from "./CartCheckout";
 
 export default async function CartPage() {
   const user = await requireAppUser(["partner"]);
-  const partner = await one<any>(`select minimum_order_cartons,default_payment_method,price_list_id from public.partners where id=$1`, [user.partner_id]);
+  const partner = await one<any>(`
+    select p.minimum_order_cartons,p.default_payment_method,p.price_list_id,p.overdue_policy,
+           coalesce(sum(v.outstanding_huf) filter (where v.due_date < current_date),0)::bigint as overdue_amount
+      from public.partners p
+      left join public.v_receivables_open v on v.partner_id=p.id
+     where p.id=$1
+     group by p.id
+  `, [user.partner_id]);
   const products = await query<any>(`
     select p.id,p.code,p.name,p.size_ml,p.units_per_carton,p.vat_rate_bps,
            coalesce(
@@ -23,10 +30,13 @@ export default async function CartPage() {
   `,[user.organization_id,partner?.price_list_id??null]);
   const addresses = await query<any>(`select id,name,postal_code,city,address_line1 from public.partner_addresses where partner_id=$1 and active=true order by is_default desc,name`, [user.partner_id]);
   const deliveryDays = await query<any>(`select weekday,cutoff_business_days from public.partner_delivery_days where partner_id=$1 and active=true order by weekday`, [user.partner_id]);
+  const blockedReason = partner?.overdue_policy === "block" && Number(partner?.overdue_amount ?? 0) > 0
+    ? "A rendelésleadás lejárt tartozás miatt blokkolva van."
+    : "";
   return (
     <div>
       <PageHeader title="Kosár és rendelés" description={`Minimum rendelés: ${partner?.minimum_order_cartons ?? 5} karton.`} />
-      <CartCheckout products={products} addresses={addresses} deliveryDays={deliveryDays} minimum={partner?.minimum_order_cartons ?? 5} defaultPayment={partner?.default_payment_method ?? "bank_transfer"} />
+      <CartCheckout products={products} addresses={addresses} deliveryDays={deliveryDays} minimum={partner?.minimum_order_cartons ?? 5} defaultPayment={partner?.default_payment_method ?? "bank_transfer"} blockedReason={blockedReason} />
     </div>
   );
 }

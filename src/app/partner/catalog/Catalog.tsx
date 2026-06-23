@@ -9,6 +9,11 @@ type Cart = Record<string, number>;
 export function Catalog({ products }: { products: any[] }) {
   const [cart, setCart] = useState<Cart>({});
   const [saved, setSaved] = useState("");
+  const groups = [
+    { title: "150 ml kiszerelés", items: products.filter((product) => Number(product.size_ml) === 150) },
+    { title: "300 ml kiszerelés", items: products.filter((product) => Number(product.size_ml) === 300) },
+    { title: "Egyéb kiszerelés", items: products.filter((product) => ![150, 300].includes(Number(product.size_ml))) }
+  ].filter((group) => group.items.length > 0);
 
   useEffect(() => {
     const raw = localStorage.getItem("gellamille-cart");
@@ -38,9 +43,14 @@ export function Catalog({ products }: { products: any[] }) {
           <Link href="/partner/cart" className="button button-primary">Rendelés véglegesítése</Link>
         </div>
       ) : null}
-      <div className="product-grid section-gap">
-        {products.map(p => <Product key={p.id} product={p} add={add} />)}
-      </div>
+      {groups.map((group) => (
+        <section className="section-gap" key={group.title}>
+          <h2>{group.title}</h2>
+          <div className="product-grid section-gap-small">
+            {group.items.map(p => <Product key={p.id} product={p} add={add} />)}
+          </div>
+        </section>
+      ))}
     </>
   );
 }

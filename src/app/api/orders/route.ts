@@ -31,8 +31,8 @@ export async function GET() {
   }
   const rows = await query(`
     select o.*,p.name as partner_name
-      from public.orders o join public.partners p on p.id=o.partner_id
-     where o.organization_id=$1 ${partnerFilter}
+     from public.orders o join public.partners p on p.id=o.partner_id
+     where o.organization_id=$1 and o.archived_at is null ${partnerFilter}
      order by o.created_at desc limit 500
   `, values);
   return NextResponse.json(rows);
@@ -54,11 +54,17 @@ export async function POST(request: Request) {
       const partnerResult = await client.query<any>(`
         select id,name,organization_id,active,minimum_order_cartons,default_payment_method,
                overdue_policy,credit_limit_huf,price_list_id
-          from public.partners where id=$1 for update
+          from public.partners where id=$1 and archived_at is null for update
       `, [partnerId]);
       const partner = partnerResult.rows[0];
       if (!partner?.active || partner.organization_id !== user.organization_id) {
         throw new Error("A partner nem található vagy inaktív.");
+      }
+      if (user.role === "partner" && partner.overdue_policy === "block") {
+        const overdue = await client.query(`select coalesce(sum(outstanding_huf),0)::bigint amount from public.v_receivables_open where partner_id=$1 and due_date<current_date`, [partnerId]);
+        if (Number(overdue.rows[0]?.amount ?? 0) > 0) {
+          throw new Error("A rendelésleadás lejárt tartozás miatt blokkolva van.");
+        }
       }
 
       const merged = new Map<number, number>();
@@ -72,15 +78,27 @@ export async function POST(request: Request) {
       const deliveryDayResult = await client.query<{
         configured_count: number;
         selected_allowed: boolean;
+        cutoff_days: number | null;
       }>(`
         select count(*)::int as configured_count,
-               coalesce(bool_or(weekday=extract(isodow from $2::date)::int), false) as selected_allowed
+               coalesce(bool_or(weekday=extract(isodow from $2::date)::int), false) as selected_allowed,
+               min(cutoff_business_days) filter (where weekday=extract(isodow from $2::date)::int)::int as cutoff_days
           from public.partner_delivery_days
          where partner_id=$1 and active=true
       `, [partnerId, input.requestedDeliveryDate]);
       const deliveryPolicy = deliveryDayResult.rows[0];
       if (Number(deliveryPolicy?.configured_count ?? 0) > 0 && !deliveryPolicy?.selected_allowed) {
         throw new Error("A kiválasztott dátum nem engedélyezett szállítási nap ennél a partnernél.");
+      }
+      const todayIso = new Date().toISOString().slice(0, 10);
+      if (input.requestedDeliveryDate < todayIso) throw new Error("Múltbeli szállítási napra nem adható le rendelés.");
+      const cutoffDays = Number(deliveryPolicy?.cutoff_days ?? 0);
+      if (cutoffDays > 0) {
+        const latestOrderDate = new Date(`${input.requestedDeliveryDate}T00:00:00.000Z`);
+        latestOrderDate.setUTCDate(latestOrderDate.getUTCDate() - cutoffDays);
+        if (todayIso > latestOrderDate.toISOString().slice(0, 10)) {
+          throw new Error(`Erre a szállítási napra a rendelési zárás már lejárt (${cutoffDays} naptári nap).`);
+        }
       }
 
       if (input.deliveryAddressId) {
@@ -169,6 +187,12 @@ export async function POST(request: Request) {
         insert into public.audit_log(actor_user_id,action,entity_type,entity_id,after_data)
         values($1,$2,'order',$3,$4::jsonb)
       `, [user.user_id, input.submit ? "order.submitted" : "order.created", String(order.id), JSON.stringify(finalResult.rows[0])]);
+      if (input.submit) {
+        await client.query(`
+          insert into public.notifications(organization_id,role_code,type,title,body,entity_type,entity_id)
+          values($1,null,'order.submitted','Új rendelés érkezett',$2,'order',$3)
+        `, [user.organization_id, `${partner.name} rendelést küldött be. Bruttó összeg: ${totals.gross_total_huf} Ft.`, String(order.id)]);
+      }
 
       return finalResult.rows[0];
     });

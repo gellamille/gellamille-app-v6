@@ -8,7 +8,7 @@ import { orderStatusLabels } from "@/lib/status";
 
 export default async function PartnerOrdersPage() {
   const user = await requireAppUser(["partner"]);
-  const orders = await query<any>(`select * from public.orders where partner_id=$1 order by created_at desc`, [user.partner_id]);
+  const orders = await query<any>(`select * from public.orders where partner_id=$1 and archived_at is null order by created_at desc`, [user.partner_id]);
   return (
     <div>
       <PageHeader title="Rendeléseim" />
