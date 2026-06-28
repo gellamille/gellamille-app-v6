@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { dateHU } from "@/lib/format";
 
 type CandidateOrder = {
-  id: number;
+  id: number | string;
   order_number: string;
   partner_name: string;
   requested_delivery_date: string;
@@ -15,7 +15,7 @@ type CandidateOrder = {
 };
 
 type Run = {
-  id: number;
+  id: number | string;
   run_number: string;
   planned_date: string;
   status: string;
@@ -25,8 +25,8 @@ type Run = {
 };
 
 type RunDelivery = {
-  id: number;
-  shipping_run_id: number;
+  id: number | string;
+  shipping_run_id: number | string;
   sequence_no: number | null;
   status: string;
   planned_date: string;
@@ -73,19 +73,20 @@ export function ShipmentPlanner({
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selectedRunId, setSelectedRunId] = useState(runs[0]?.id ?? 0);
+  const [selectedRunId, setSelectedRunId] = useState(runs[0]?.id ? String(runs[0].id) : "");
   const today = new Date().toISOString().slice(0, 10);
-  const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
+  const selectedRun = runs.find((run) => String(run.id) === selectedRunId) ?? runs[0];
   const deliveriesByRun = useMemo(() => {
-    const grouped = new Map<number, RunDelivery[]>();
+    const grouped = new Map<string, RunDelivery[]>();
     for (const delivery of runDeliveries) {
-      const current = grouped.get(delivery.shipping_run_id) ?? [];
+      const runId = String(delivery.shipping_run_id);
+      const current = grouped.get(runId) ?? [];
       current.push(delivery);
-      grouped.set(delivery.shipping_run_id, current);
+      grouped.set(runId, current);
     }
     return grouped;
   }, [runDeliveries]);
-  const selectedDeliveries = selectedRun ? deliveriesByRun.get(selectedRun.id) ?? [] : [];
+  const selectedDeliveries = selectedRun ? deliveriesByRun.get(String(selectedRun.id)) ?? [] : [];
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -115,7 +116,7 @@ export function ShipmentPlanner({
     router.refresh();
   }
 
-  async function update(event: FormEvent<HTMLFormElement>, runId: number) {
+  async function update(event: FormEvent<HTMLFormElement>, runId: number | string) {
     event.preventDefault();
     const form = event.currentTarget;
     const fd = new FormData(form);
@@ -180,8 +181,8 @@ export function ShipmentPlanner({
         {runs.length ? (
           <form className="card stack" key={selectedRun?.id ?? "no-run"} onSubmit={(event) => selectedRun ? update(event, selectedRun.id) : event.preventDefault()}>
             <label>Szerkesztendő járat
-              <select value={selectedRun?.id ?? 0} onChange={(event) => setSelectedRunId(Number(event.target.value))}>
-                {runs.map((run) => <option key={run.id} value={run.id}>{run.run_number} · {dateHU(run.planned_date)} · {run.driver_name ?? "nincs futár"}</option>)}
+              <select value={selectedRun?.id ? String(selectedRun.id) : ""} onChange={(event) => setSelectedRunId(event.target.value)}>
+                {runs.map((run) => <option key={run.id} value={String(run.id)}>{run.run_number} · {dateHU(run.planned_date)} · {run.driver_name ?? "nincs futár"}</option>)}
               </select>
             </label>
             {selectedRun ? (

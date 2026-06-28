@@ -9,30 +9,36 @@ export function money(value: number | string | null | undefined) {
 
 export function dateHU(value: string | Date | null | undefined) {
   if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("hu-HU", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export function dateWithWeekdayHU(value: string | Date | null | undefined) {
   if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("hu-HU", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     weekday: "long"
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export function dateTimeHU(value: string | Date | null | undefined) {
   if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("hu-HU", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
-  }).format(new Date(value));
+  }).format(date);
 }
