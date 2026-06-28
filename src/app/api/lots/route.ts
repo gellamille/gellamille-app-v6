@@ -25,6 +25,7 @@ export async function GET() {
       from public.lots l
       join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml
      where l.organization_id=$1
+       and l.archived_at is null
      order by l.created_at desc limit 500
   `, [user.organization_id]);
   return NextResponse.json(rows);

@@ -29,7 +29,7 @@ export async function POST(request: Request) {
           join public.products p on p.id=c.product_id
           join public.lots l on l.id=c.lot_id
           left join public.inventory_locations from_loc on from_loc.id=c.location_id
-         where c.organization_id=$1 and upper(c.carton_code)=upper($2) and c.archived_at is null
+         where c.organization_id=$1 and upper(c.carton_code)=upper($2) and c.archived_at is null and l.archived_at is null
          limit 1
          for update of c
       `, [user.organization_id, input.code]);

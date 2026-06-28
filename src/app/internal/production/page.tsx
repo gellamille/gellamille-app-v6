@@ -20,6 +20,7 @@ export default async function ProductionPage() {
       from public.lots l
       left join public.v_lot_stock_summary v on v.lot_id = l.id
       left join public.v_lot_carton_summary c on c.lot_id = l.id
+     where l.archived_at is null
      order by l.production_date desc, l.id desc
      limit 250
   `);

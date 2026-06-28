@@ -23,7 +23,7 @@ export async function POST(request: Request) {
                p.id as product_id,p.name as product_name,p.units_per_carton
           from public.lots l
           join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml and p.organization_id=l.organization_id
-         where l.id=$1 and l.organization_id=$2
+         where l.id=$1 and l.organization_id=$2 and l.archived_at is null
          for update of l
       `, [input.lotId, user.organization_id]);
       const lot = lotResult.rows[0];

@@ -41,7 +41,7 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
       from public.lots l
       join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml and p.organization_id=l.organization_id
       left join public.inventory_locations loc on loc.organization_id=l.organization_id and loc.code='CENTRAL'
-     where l.id=$1 and l.organization_id=$2
+     where l.id=$1 and l.organization_id=$2 and l.archived_at is null
      limit 1
   `, [id, user.organization_id]) : [];
   const lot = lots[0];
@@ -52,7 +52,7 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
            (
              select max(e.created_at)
                from public.inventory_carton_events e
-              where e.carton_id=c.id and e.event_type in ('label_printed','label_reprinted')
+              where e.carton_id=c.id and e.event_type in ('label_printed','label_reprinted') and e.archived_at is null
            ) as printed_at
       from public.inventory_cartons c
       left join public.inventory_locations loc on loc.id=c.location_id

@@ -48,12 +48,12 @@ type SearchParams = {
 };
 
 export default async function CartonsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  await requireAppUser(["admin", "management", "staff", "production", "warehouse"]);
+  const user = await requireAppUser(["admin", "management", "staff", "production", "warehouse"]);
   const params = await searchParams;
   const status = typeof params.status === "string" ? params.status : "";
   const q = typeof params.q === "string" ? params.q.trim() : "";
-  const values: unknown[] = [];
-  const where = ["c.archived_at is null"];
+  const values: unknown[] = [user.organization_id];
+  const where = ["c.organization_id=$1", "c.archived_at is null", "l.archived_at is null"];
 
   if (status) {
     values.push(status);
@@ -67,10 +67,13 @@ export default async function CartonsPage({ searchParams }: { searchParams: Prom
   const summary = await query<any>(`
     select c.status,count(*)::int as count,coalesce(sum(c.quantity_units),0)::int as units
       from public.inventory_cartons c
-     where c.archived_at is null
+      join public.lots l on l.id=c.lot_id
+     where c.organization_id=$1
+       and c.archived_at is null
+       and l.archived_at is null
      group by c.status
      order by c.status
-  `);
+  `, [user.organization_id]);
 
   const cartons = await query<any>(`
     select c.id,c.carton_code,c.quantity_units,c.status,c.created_at,c.updated_at,

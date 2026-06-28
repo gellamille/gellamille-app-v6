@@ -22,7 +22,7 @@ export async function POST(request:Request){
    const lotResult=await client.query<any>(`
     select l.*,p.id product_id,p.name product_name from public.lots l
     join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml and p.organization_id=l.organization_id
-    where l.id=$1 for update
+    where l.id=$1 and l.archived_at is null for update
    `,[input.lotId]);
    const lot=lotResult.rows[0];
    if(!lot||lot.organization_id!==user.organization_id)throw new Error("A LOT nem található.");

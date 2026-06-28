@@ -24,7 +24,7 @@ export default async function DashboardPage() {
       (select count(*)::int from public.orders where status in ('approved','partially_approved','stock_shortage') and archived_at is null) as accepted_orders,
       (select count(*)::int from public.orders where fulfillment_status in ('packed','partially_delivered') and archived_at is null) as packed_orders,
       (select count(*)::int from public.v_product_stock_summary where available_units < minimum_stock_units) as low_stock_products,
-      (select count(*)::int from public.lots where status = 'active') as active_lots,
+      (select count(*)::int from public.lots where status = 'active' and archived_at is null) as active_lots,
       (select coalesce(sum(outstanding_huf),0)::bigint from public.v_receivables_open) as receivables_huf
   `);
 

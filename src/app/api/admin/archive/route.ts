@@ -51,7 +51,78 @@ const archiveTargets = [
   {
     label: "Készletmozgások",
     sql: `update public.inventory_movements set archived_at=now()
+           where organization_id=$1
+             and archived_at is null
+             and (
+               created_at >= $2::date and created_at < $3::date
+               or exists (
+                 select 1 from public.lots l
+                  where l.id=inventory_movements.lot_id
+                    and l.organization_id=$1
+                    and l.created_at >= $2::date and l.created_at < $3::date
+               )
+             )`
+  },
+  {
+    label: "Készletfoglalások",
+    sql: `update public.stock_reservations sr set archived_at=now()
+           from public.order_items oi
+           join public.orders o on o.id=oi.order_id
+          where sr.order_item_id=oi.id
+            and sr.archived_at is null
+            and o.organization_id=$1
+            and (
+              sr.created_at >= $2::date and sr.created_at < $3::date
+              or o.created_at >= $2::date and o.created_at < $3::date
+            )`
+  },
+  {
+    label: "LOT foglalások",
+    sql: `update public.order_item_lot_allocations a set archived_at=now()
+           from public.order_items oi
+           join public.orders o on o.id=oi.order_id
+          where a.order_item_id=oi.id
+            and a.archived_at is null
+            and o.organization_id=$1
+            and (
+              a.created_at >= $2::date and a.created_at < $3::date
+              or o.created_at >= $2::date and o.created_at < $3::date
+            )`
+  },
+  {
+    label: "LOT-ok",
+    sql: `update public.lots set archived_at=now()
            where organization_id=$1 and archived_at is null and created_at >= $2::date and created_at < $3::date`
+  },
+  {
+    label: "Kartonok",
+    sql: `update public.inventory_cartons set archived_at=now(), status='archived'
+           where organization_id=$1
+             and archived_at is null
+             and (
+               created_at >= $2::date and created_at < $3::date
+               or exists (
+                 select 1 from public.lots l
+                  where l.id=inventory_cartons.lot_id
+                    and l.organization_id=$1
+                    and l.created_at >= $2::date and l.created_at < $3::date
+               )
+             )`
+  },
+  {
+    label: "Karton események",
+    sql: `update public.inventory_carton_events e set archived_at=now()
+           where e.organization_id=$1
+             and e.archived_at is null
+             and (
+               e.created_at >= $2::date and e.created_at < $3::date
+               or exists (
+                 select 1 from public.inventory_cartons c
+                  where c.id=e.carton_id
+                    and c.organization_id=$1
+                    and c.archived_at is not null
+               )
+             )`
   },
   {
     label: "Visszáruk",

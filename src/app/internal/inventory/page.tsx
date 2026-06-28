@@ -99,8 +99,11 @@ export default async function InventoryPage({ searchParams }: { searchParams?: P
       join public.products p on p.flavor_code = l.flavor_code and p.size_ml = l.size_ml
       left join public.v_lot_stock_summary v on v.lot_id = l.id
       left join public.v_lot_carton_summary c on c.lot_id = l.id
-     where l.status in ('active','depleted')
-        or (l.status in ('recalled','scrapped','expired') and coalesce(v.physical_units,0) <> 0)
+     where l.archived_at is null
+       and (
+         l.status in ('active','depleted')
+         or (l.status in ('recalled','scrapped','expired') and coalesce(v.physical_units,0) <> 0)
+       )
      order by l.best_before, l.id
      limit 250
   `);
@@ -120,6 +123,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: P
       join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml
       left join public.v_lot_stock_summary v on v.lot_id=l.id
      where l.status='active'
+       and l.archived_at is null
      order by l.best_before,l.id
   `) : [];
   const locations = canAdjust ? await query<any>(`select id,name from public.inventory_locations where active order by name`) : [];

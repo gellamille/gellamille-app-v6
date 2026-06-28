@@ -26,7 +26,7 @@ export async function POST(request: Request) {
           join public.products p on p.id=c.product_id
           join public.lots l on l.id=c.lot_id
           left join public.inventory_locations loc on loc.id=c.location_id
-         where c.organization_id=$1 and upper(c.carton_code)=upper($2) and c.archived_at is null
+         where c.organization_id=$1 and upper(c.carton_code)=upper($2) and c.archived_at is null and l.archived_at is null
          limit 1
       `, [user.organization_id, input.code]);
 
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         left join public.inventory_locations to_loc on to_loc.id=e.to_location_id
         left join public.app_users au on au.user_id=e.actor_user_id
         left join public.orders o on o.id=e.order_id
-       where e.organization_id=$1 and e.carton_id=$2
+       where e.organization_id=$1 and e.carton_id=$2 and e.archived_at is null
        order by e.created_at desc
        limit 25
     `, [user.organization_id, carton.id]);

@@ -59,7 +59,7 @@ export default async function CartonDetailPage({ params }: { params: Promise<{ i
       left join public.order_item_lot_allocations a on a.carton_id=c.id and a.status in ('allocated','picked','delivered')
       left join public.order_items oi on oi.id=a.order_item_id
       left join public.orders o on o.id=oi.order_id
-     where c.id=$1 and c.organization_id=$2 and c.archived_at is null
+     where c.id=$1 and c.organization_id=$2 and c.archived_at is null and l.archived_at is null
      limit 1
   `, [id, user.organization_id]);
 
@@ -78,7 +78,7 @@ export default async function CartonDetailPage({ params }: { params: Promise<{ i
       left join public.app_users au on au.user_id=e.actor_user_id
       left join public.orders o on o.id=e.order_id
       left join public.order_items oi on oi.id=e.order_item_id
-     where e.organization_id=$1 and e.carton_id=$2
+     where e.organization_id=$1 and e.carton_id=$2 and e.archived_at is null
      order by e.created_at desc,e.id desc
      limit 100
   `, [user.organization_id, carton.id]);
