@@ -72,7 +72,7 @@ export default async function DashboardPage() {
         <Link href="/internal/orders?status=approved" className="card metric"><div className="metric-label">Elfogadott rendelés</div><div className="metric-value">{m.accepted_orders}</div><div className="metric-note">Foglalás vagy készlethiány alatt</div></Link>
         <Link href="/internal/orders?fulfillment=packed" className="card metric"><div className="metric-label">Átadásra kész</div><div className="metric-value">{m.packed_orders}</div><div className="metric-note">Összekészített rendelés</div></Link>
         <Link href="/internal/production" className="card metric"><div className="metric-label">Aktív LOT</div><div className="metric-value">{m.active_lots}</div><div className="metric-note">Eladható életciklusban</div></Link>
-        <Link href="/internal/inventory" className="card metric"><div className="metric-label">Alacsony készlet</div><div className="metric-value">{m.low_stock_products}</div><div className="metric-note">Minimumszint alatt</div></Link>
+        <Link href="/internal/inventory" className="card metric"><div className="metric-label">Kritikus készlet</div><div className="metric-value">{m.low_stock_products}</div><div className="metric-note">Minimumszint alatt</div></Link>
         <Link href="/internal/finance" className="card metric"><div className="metric-label">Nyitott követelés</div><div className="metric-value">{money(m.receivables_huf)}</div><div className="metric-note">Átadáskor keletkezik</div></Link>
       </section>
 

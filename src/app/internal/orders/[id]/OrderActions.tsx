@@ -6,15 +6,21 @@ import { useState } from "react";
 export function OrderActions({
   orderId,
   status,
-  fulfillmentStatus
+  fulfillmentStatus,
+  canDeliver,
+  hasMissingReservation
 }: {
   orderId: number;
   status: string;
   fulfillmentStatus: string;
+  canDeliver: boolean;
+  hasMissingReservation: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const canApprove = status === "submitted" || status === "stock_shortage" || (status === "partially_approved" && hasMissingReservation);
+  const canPick = (status === "approved" || status === "partially_approved") && !canDeliver && !["delivered", "cancelled"].includes(fulfillmentStatus);
 
   async function action(name: string, extra: Record<string, unknown> = {}) {
     setBusy(true);
@@ -35,15 +41,15 @@ export function OrderActions({
 
   return (
     <div className="inline">
-      {status === "submitted" || status === "stock_shortage" ? (
+      {canApprove ? (
         <button className="button button-primary" disabled={busy} onClick={() => action("approve", { allowPartial: true })}>
-          Elfogadás és foglalás
+          {status === "partially_approved" ? "Hiányzó készlet újrafoglalása" : "Elfogadás és foglalás"}
         </button>
       ) : null}
-      {(status === "approved" || status === "partially_approved") && fulfillmentStatus !== "packed" ? (
+      {canPick ? (
         <button className="button" disabled={busy} onClick={() => action("allocate_fefo")}>FEFO összekészítés</button>
       ) : null}
-      {fulfillmentStatus === "packed" || fulfillmentStatus === "partially_delivered" ? (
+      {canDeliver && (fulfillmentStatus === "packed" || fulfillmentStatus === "partially_delivered") ? (
         <button className="button button-primary" disabled={busy} onClick={() => action("deliver_all")}>Átadás és követelés</button>
       ) : null}
       {message ? <span className="text-danger">{message}</span> : null}

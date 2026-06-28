@@ -13,6 +13,16 @@ export function NewLotForm({ products, operators }: { products: any[]; operators
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const selected = useMemo(() => products.find(p => String(p.id) === productId), [products, productId]);
+  const cartonPreview = useMemo(() => {
+    const units = Number(selected?.units_per_carton ?? 0);
+    const total = Number(quantity || 0);
+    if (!units || !total) return "";
+    const full = Math.floor(total / units);
+    const loose = total % units;
+    return loose > 0
+      ? `${full} teljes karton + ${loose} db bontott karton`
+      : `${full} karton`;
+  }, [quantity, selected]);
 
   function choose(value: string) {
     setProductId(value);
@@ -53,6 +63,7 @@ export function NewLotForm({ products, operators }: { products: any[]; operators
         <label>Gyártott darabszám<input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></label>
         <label>Felelős<select value={operatorId} onChange={(e) => setOperatorId(e.target.value)}><option value="">Válassz felelőst</option>{operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
         <label>Várható LOT-formátum<input disabled value={selected ? `${selected.code.slice(0,3)}${selected.size_ml === 150 ? "15" : "30"}-${productionDate.slice(2,4)}-####` : ""} /></label>
+        <label>Várható kartonok<input disabled value={cartonPreview} /></label>
         <label className="full">Megjegyzés<textarea value={note} onChange={(e) => setNote(e.target.value)} /></label>
       </div>
       {error ? <div className="alert alert-danger section-gap">{error}</div> : null}

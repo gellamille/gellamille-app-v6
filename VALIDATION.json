@@ -1,5 +1,5 @@
 {
-  "project": "gellamille-app-v7",
+  "project": "gellamille-app-v7.1",
   "architecture": "single-nextjs-app",
   "routes": [
     "/internal",
@@ -7,7 +7,7 @@
     "/api/health"
   ],
   "database_prerequisite": "migration 006 applied",
-  "database_migration": "008_v7_unified_operating_system.sql",
+  "database_migration": "008_v7_unified_operating_system.sql through 014_order_allocation_cartons.sql",
   "database_verification": "009_verify_v7.sql",
   "product_variants": 16,
   "minimum_order_cartons_default": 5,
@@ -16,10 +16,11 @@
   "partner_order_unit": "carton",
   "allocation_rule": "FEFO",
   "receivable_trigger": "delivery status delivered",
-  "status": "source-package-complete",
-  "typescript_files_parsed": 76,
+  "status": "local-build-passed",
+  "typescript_files_parsed": 115,
   "package_lock_generated": true,
-  "static_checks": "passed",
-  "runtime_build": "not_run_dependency_install_timeout",
-  "deployment_status": "ready_for_local_or_vercel_build"
+  "static_checks": "typecheck_lint_build_passed",
+  "runtime_build": "next_build_passed",
+  "local_dev_check": "root_redirects_to_login_login_returns_200",
+  "deployment_status": "ready_for_database_migration_and_vercel_build"
 }

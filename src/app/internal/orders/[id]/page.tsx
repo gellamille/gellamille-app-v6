@@ -7,6 +7,8 @@ import { dateHU, dateTimeHU, money } from "@/lib/format";
 import { INTERNAL_ROLES, requireAppUser } from "@/lib/auth";
 import { financeStatusLabels, fulfillmentLabels, orderStatusLabels } from "@/lib/status";
 import { OrderActions } from "./OrderActions";
+import { OrderCartonPicker } from "./OrderCartonPicker";
+import { UnpickCartonButton } from "./UnpickCartonButton";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAppUser(INTERNAL_ROLES);
@@ -24,7 +26,17 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   if (!order) notFound();
 
   const items = await query<any>(`
-    select oi.*, p.status as product_status
+    select oi.*, p.status as product_status,
+           coalesce((
+             select sum(a.quantity_units)
+               from public.order_item_lot_allocations a
+              where a.order_item_id=oi.id and a.status in ('allocated','picked')
+           ),0)::int as lot_quantity,
+           coalesce((
+             select sum(a.quantity_units)
+               from public.order_item_lot_allocations a
+              where a.order_item_id=oi.id and a.status='picked'
+           ),0)::int as picked_quantity
       from public.order_items oi
       join public.products p on p.id = oi.product_id
      where oi.order_id = $1
@@ -43,21 +55,51 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     select * from public.v_receivables_open where order_id = $1 order by delivered_at desc
   `, [id]);
   const lotAllocations = await query<any>(`
-    select a.id,a.quantity_units,a.status,a.delivered_at,l.lot_number,l.best_before,oi.product_name_snapshot
+    select a.id,a.quantity_units,a.status,a.delivered_at,l.lot_number,l.best_before,oi.product_name_snapshot,
+           c.carton_code,c.id as carton_id
       from public.order_item_lot_allocations a
       join public.lots l on l.id=a.lot_id
       join public.order_items oi on oi.id=a.order_item_id
+      left join public.inventory_cartons c on c.id=a.carton_id
      where oi.order_id=$1
      order by oi.id,l.best_before,l.lot_number
   `, [id]);
+  const itemReadiness = items.map((item) => {
+    const remaining = Math.max(0, Number(item.unit_quantity ?? 0) - Number(item.cancelled_quantity ?? 0) - Number(item.fulfilled_quantity ?? 0));
+    const reserved = Number(item.reserved_quantity ?? 0);
+    const picked = Number(item.picked_quantity ?? 0);
+    const missingReservation = Math.max(0, remaining - reserved);
+    const missingLot = Math.max(0, remaining - picked);
+    const issue = missingReservation > 0
+      ? `${missingReservation} db hiányzik a foglalásból. Gyártás vagy készletre vétel szükséges.`
+      : missingLot > 0
+        ? `${missingLot} db hiányzik a LOT-kiosztásból. FEFO összekészítés szükséges.`
+        : "";
+    return { ...item, remaining, reserved, picked, missingReservation, missingLot, issue };
+  });
+  const activeItems = itemReadiness.filter((item) => item.remaining > 0);
+  const readinessIssues = activeItems.filter((item) => item.issue);
+  const hasMissingReservation = activeItems.some((item) => item.missingReservation > 0);
+  const canDeliver = activeItems.length > 0 && readinessIssues.length === 0;
+  const canScanPick = ["approved", "partially_approved"].includes(order.status) && !["delivered", "cancelled"].includes(order.fulfillment_status);
 
   return (
     <div className="page">
       <PageHeader
         title={order.order_number}
         description={`${order.partner_name} · ${dateHU(order.requested_delivery_date)}`}
-        actions={<><OrderActions orderId={Number(id)} status={order.status} fulfillmentStatus={order.fulfillment_status} /><Link className="button button-danger" href={`/internal/recalls?orderId=${id}`}>Visszahívás</Link></>}
+        actions={<><OrderActions orderId={Number(id)} status={order.status} fulfillmentStatus={order.fulfillment_status} canDeliver={canDeliver} hasMissingReservation={hasMissingReservation} /><Link className="button button-danger" href={`/internal/recalls?orderId=${id}`}>Visszahívás</Link></>}
       />
+      {readinessIssues.length ? (
+        <section className="alert alert-warning section-gap">
+          <strong>Átadás még nem indítható.</strong>
+          <div className="section-gap-small">
+            {readinessIssues.map((item) => (
+              <div key={item.id}>{item.product_name_snapshot}: {item.issue}</div>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <section className="grid grid-3">
         <div className="card">
           <h3>Rendelési állapot</h3>
@@ -98,15 +140,23 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       </section>
 
       <section className="section-gap">
+        <OrderCartonPicker orderId={Number(id)} enabled={canScanPick} />
+      </section>
+
+      <section className="section-gap">
         <h2>Tételek</h2>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Termék</th><th>Karton</th><th>Rendelt db</th><th>Foglalt</th><th>Átadott</th><th>Lemondott</th><th>Nettó/db</th><th>Bruttó</th></tr></thead>
+            <thead><tr><th>Termék</th><th>Karton</th><th>Rendelt db</th><th>Foglalt</th><th>LOT</th><th>Átadott</th><th>Lemondott</th><th>Nettó/db</th><th>Bruttó</th></tr></thead>
             <tbody>
-              {items.map((i) => (
+              {itemReadiness.map((i) => (
                 <tr key={i.id}>
-                  <td>{i.product_name_snapshot}<div className="text-muted mono">{i.product_code_snapshot}</div></td>
-                  <td>{i.cartons}</td><td>{i.unit_quantity}</td><td>{i.reserved_quantity}</td><td>{i.fulfilled_quantity}</td><td>{i.cancelled_quantity}</td>
+                  <td>
+                    {i.product_name_snapshot}
+                    <div className="text-muted mono">{i.product_code_snapshot}</div>
+                    {i.issue ? <div className={i.missingReservation > 0 ? "text-danger" : "text-warning"}>{i.issue}</div> : null}
+                  </td>
+                  <td>{i.cartons}</td><td>{i.unit_quantity}</td><td>{i.reserved_quantity}</td><td>{i.picked_quantity}/{i.remaining} db</td><td>{i.fulfilled_quantity}</td><td>{i.cancelled_quantity}</td>
                   <td>{money(i.net_unit_price_huf_snapshot)}</td><td>{money(i.gross_total_huf)}</td>
                 </tr>
               ))}
@@ -120,19 +170,25 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           <summary className="details-summary">LOT követés</summary>
           <div className="table-wrap section-gap-small">
             <table>
-              <thead><tr><th>Termék</th><th>LOT</th><th>Lejárat</th><th>Mennyiség</th><th>Állapot</th><th>Átadva</th></tr></thead>
+              <thead><tr><th>Termék</th><th>LOT</th><th>Karton</th><th>Lejárat</th><th>Mennyiség</th><th>Állapot</th><th>Átadva</th><th>Művelet</th></tr></thead>
               <tbody>
                 {lotAllocations.map((allocation) => (
                   <tr key={allocation.id}>
                     <td>{allocation.product_name_snapshot}</td>
                     <td className="mono">{allocation.lot_number}</td>
+                    <td className="mono">{allocation.carton_code ?? "—"}</td>
                     <td>{dateHU(allocation.best_before)}</td>
                     <td>{allocation.quantity_units} db</td>
                     <td><StatusBadge value={allocation.status} label={allocation.status} /></td>
                     <td>{dateTimeHU(allocation.delivered_at)}</td>
+                    <td>
+                      {allocation.carton_id && ["allocated", "picked"].includes(allocation.status) ? (
+                        <UnpickCartonButton orderId={Number(id)} allocationId={Number(allocation.id)} cartonCode={allocation.carton_code} />
+                      ) : <span className="text-muted">—</span>}
+                    </td>
                   </tr>
                 ))}
-                {!lotAllocations.length ? <tr><td colSpan={6}>Még nincs LOT hozzárendelés ehhez a rendeléshez.</td></tr> : null}
+                {!lotAllocations.length ? <tr><td colSpan={8}>Még nincs LOT hozzárendelés ehhez a rendeléshez.</td></tr> : null}
               </tbody>
             </table>
           </div>

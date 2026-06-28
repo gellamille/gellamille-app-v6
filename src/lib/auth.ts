@@ -10,6 +10,9 @@ export type AppUser = {
   partner_id: number | null;
   active: boolean;
   organization_id: number | null;
+  password_change_required?: boolean;
+  temporary_password_expires_at?: string | null;
+  password_changed_at?: string | null;
 };
 
 export async function currentAppUser(): Promise<AppUser | null> {
@@ -23,7 +26,8 @@ export async function currentAppUser(): Promise<AppUser | null> {
   if (!user) return null;
 
   return one<AppUser>(
-    `select user_id, email, display_name, role, partner_id, active, organization_id
+    `select user_id, email, display_name, role, partner_id, active, organization_id,
+            password_change_required, temporary_password_expires_at, password_changed_at
        from public.app_users
       where user_id = $1`,
     [user.id]

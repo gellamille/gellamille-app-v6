@@ -18,7 +18,8 @@ export async function apiUser(allowedRoles?: string[]): Promise<ApiAuthResult> {
   if (!user) return { error: NextResponse.json({ error: "Nincs bejelentkezve." }, { status: 401 }), user: null };
 
   const appUser = await one<AppUser>(
-    `select user_id, email, display_name, role, partner_id, active, organization_id
+    `select user_id, email, display_name, role, partner_id, active, organization_id,
+            password_change_required, temporary_password_expires_at, password_changed_at
        from public.app_users where user_id = $1`,
     [user.id]
   );

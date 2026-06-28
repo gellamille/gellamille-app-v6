@@ -7,7 +7,7 @@ export default async function NewLotPage() {
   await requireAppUser(["admin", "management", "production"]);
 
   const products = await query<any>(`
-    select p.id, p.code, p.name, p.flavor_code, p.size_ml
+    select p.id, p.code, p.name, p.flavor_code, p.size_ml, p.units_per_carton
       from public.products p
      where p.status in ('active','seasonal') and p.active = true
      order by p.size_ml, p.sort_order

@@ -13,9 +13,13 @@ export default async function ProductionPage() {
            l.production_period, l.best_before, l.quantity, l.operator_name, l.status,
            coalesce(v.physical_units,0)::int as physical_units,
            coalesce(v.allocated_units,0)::int as allocated_units,
-           coalesce(v.available_units,0)::int as available_units
+           coalesce(v.available_units,0)::int as available_units,
+           coalesce(c.carton_count,0)::int as carton_count,
+           coalesce(c.available_carton_count,0)::int as available_carton_count,
+           coalesce(c.allocated_carton_count,0)::int as allocated_carton_count
       from public.lots l
       left join public.v_lot_stock_summary v on v.lot_id = l.id
+      left join public.v_lot_carton_summary c on c.lot_id = l.id
      order by l.production_date desc, l.id desc
      limit 250
   `);
@@ -29,7 +33,7 @@ export default async function ProductionPage() {
       />
       <div className="table-wrap">
         <table>
-          <thead><tr><th>LOT</th><th>Termék</th><th>Gyártás</th><th>Lejárat</th><th>Felelős</th><th>Gyártott</th><th>Fizikai</th><th>Foglalt</th><th>Szabad</th><th>Állapot</th></tr></thead>
+          <thead><tr><th>LOT</th><th>Termék</th><th>Gyártás</th><th>Lejárat</th><th>Felelős</th><th>Gyártott</th><th>Karton</th><th>Fizikai</th><th>Foglalt</th><th>Szabad</th><th>Állapot</th><th>Művelet</th></tr></thead>
           <tbody>
             {lots.map(l => (
               <tr key={l.id}>
@@ -39,13 +43,17 @@ export default async function ProductionPage() {
                 <td>{dateHU(l.best_before)}</td>
                 <td>{l.operator_name}</td>
                 <td>{l.quantity} db</td>
+                <td>{l.carton_count} db<div className="text-muted">{l.available_carton_count} szabad · {l.allocated_carton_count} foglalt</div></td>
                 <td>{l.physical_units} db</td>
                 <td>{l.allocated_units} db</td>
                 <td><strong>{l.available_units} db</strong></td>
                 <td><StatusBadge value={l.status} label={l.status === "active" ? "Aktív" : l.status === "void" ? "Sztornózott" : l.status} /></td>
+                <td>
+                  {l.carton_count > 0 ? <Link className="button button-small" href={`/internal/inventory/cartons/labels/${l.id}`}>Címkék</Link> : <span className="text-muted">-</span>}
+                </td>
               </tr>
             ))}
-            {!lots.length ? <tr><td colSpan={10}>Még nincs LOT.</td></tr> : null}
+            {!lots.length ? <tr><td colSpan={12}>Még nincs LOT.</td></tr> : null}
           </tbody>
         </table>
       </div>

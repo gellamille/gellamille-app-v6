@@ -42,9 +42,9 @@ export async function POST(request: Request) {
 
       const productResult = await client.query<{
         id: number; flavor_code: string; size_ml: number; purchase_unit_price_huf: number;
-        organization_id: number; active: boolean; status: string;
+        units_per_carton: number; organization_id: number; active: boolean; status: string;
       }>(`
-        select id,flavor_code,size_ml,purchase_unit_price_huf,organization_id,active,status
+        select id,flavor_code,size_ml,purchase_unit_price_huf,units_per_carton,organization_id,active,status
           from public.products where id=$1 for update
       `, [input.productId]);
       const product = productResult.rows[0];
@@ -53,6 +53,10 @@ export async function POST(request: Request) {
       }
       if (product.organization_id !== user.organization_id) {
         throw new Error("A termék másik szervezethez tartozik.");
+      }
+      const unitsPerCarton = Number(product.units_per_carton ?? 0);
+      if (!Number.isInteger(unitsPerCarton) || unitsPerCarton <= 0) {
+        throw new Error("A termék karton kiszerelése nincs beállítva.");
       }
 
       const operatorResult = await client.query(`select id from public.operators where id=$1 and active=true`, [input.operatorId]);
@@ -85,12 +89,62 @@ export async function POST(request: Request) {
         ) values($1,$2,$3,$4,'production_receipt',$5,$6,$7,$8)
       `, [user.organization_id, product.id, lot.id, location.id, input.quantity, purchasePrice, "LOT létrehozás és automatikus készletre vétel", user.user_id]);
 
+      const fullCartons = Math.floor(input.quantity / unitsPerCarton);
+      const remainderUnits = input.quantity % unitsPerCarton;
+      const cartonQuantities = [
+        ...Array.from({ length: fullCartons }, () => unitsPerCarton),
+        ...(remainderUnits > 0 ? [remainderUnits] : [])
+      ];
+      const cartonSummary = cartonQuantities.length ? await client.query<{
+        carton_count: number;
+        first_carton_code: string | null;
+        last_carton_code: string | null;
+      }>(`
+        with inserted as (
+          insert into public.inventory_cartons(
+            organization_id,product_id,lot_id,location_id,quantity_units,status,created_by
+          )
+          select $1,$2,$3,$4,quantity_units,'in_stock',$5
+            from unnest($6::integer[]) as carton(quantity_units)
+          returning id,carton_code,quantity_units
+        ), logged as (
+          insert into public.inventory_carton_events(
+            organization_id,carton_id,event_type,to_location_id,actor_user_id,note,event_data
+          )
+          select $1,id,'received',$4,$5,'LOT létrehozásból automatikusan készletre vett karton',
+                 jsonb_build_object('lot_id',$3,'quantity_units',quantity_units)
+            from inserted
+          returning id
+        )
+        select count(*)::int as carton_count,
+               min(carton_code) as first_carton_code,
+               max(carton_code) as last_carton_code
+          from inserted
+      `, [user.organization_id, product.id, lot.id, location.id, user.user_id, cartonQuantities]) : { rows: [{ carton_count: 0, first_carton_code: null, last_carton_code: null }] };
+
       await client.query(`
         insert into public.audit_log(actor_user_id,action,entity_type,entity_id,after_data)
         values($1,'lot.created_and_received','lot',$2,$3::jsonb)
-      `, [user.user_id, String(lot.id), JSON.stringify({ lot_number: lot.lot_number, quantity: input.quantity, product_id: product.id, purchase_unit_price_huf: purchasePrice })]);
+      `, [user.user_id, String(lot.id), JSON.stringify({
+        lot_number: lot.lot_number,
+        quantity: input.quantity,
+        product_id: product.id,
+        purchase_unit_price_huf: purchasePrice,
+        units_per_carton: unitsPerCarton,
+        carton_count: cartonSummary.rows[0]?.carton_count ?? 0,
+        first_carton_code: cartonSummary.rows[0]?.first_carton_code ?? null,
+        last_carton_code: cartonSummary.rows[0]?.last_carton_code ?? null
+      })]);
 
-      return { ...lot, purchase_unit_price_huf: purchasePrice, product_id: product.id };
+      return {
+        ...lot,
+        purchase_unit_price_huf: purchasePrice,
+        product_id: product.id,
+        units_per_carton: unitsPerCarton,
+        carton_count: cartonSummary.rows[0]?.carton_count ?? 0,
+        first_carton_code: cartonSummary.rows[0]?.first_carton_code ?? null,
+        last_carton_code: cartonSummary.rows[0]?.last_carton_code ?? null
+      };
     });
 
     return NextResponse.json(result, { status: 201 });

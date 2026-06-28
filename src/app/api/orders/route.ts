@@ -125,6 +125,7 @@ export async function POST(request: Request) {
       for (const item of items) {
         const productResult = await client.query<any>(`
           select p.*,
+                 coalesce(s.available_units,0)::int as available_units,
                  coalesce(
                    (select pli.net_unit_price_huf
                       from public.price_list_items pli
@@ -137,18 +138,22 @@ export async function POST(request: Request) {
                    p.net_unit_price_huf
                  )::int as effective_price
             from public.products p
+            left join public.v_product_stock_summary s on s.product_id=p.id
            where p.id=$1 and p.organization_id=$3 and p.active=true
              and p.status in ('active','seasonal')
         `, [item.productId, partner.price_list_id, user.organization_id]);
         const product = productResult.rows[0];
         if (!product) throw new Error(`Nem rendelhető termékazonosító: ${item.productId}`);
+        const units = item.cartons * product.units_per_carton;
+        if (user.role === "partner" && units > Number(product.available_units ?? 0)) {
+          throw new Error(`${product.name} jelenleg nincs elég készleten a választott mennyiséghez.`);
+        }
 
         const inserted = await client.query<any>(`
           insert into public.order_items(order_id,product_id,cartons)
           values($1,$2,$3) returning *
         `, [order.id, product.id, item.cartons]);
         const row = inserted.rows[0];
-        const units = item.cartons * product.units_per_carton;
         const net = units * product.effective_price;
         const vat = Math.round(net * product.vat_rate_bps / 10000);
         const gross = net + vat;

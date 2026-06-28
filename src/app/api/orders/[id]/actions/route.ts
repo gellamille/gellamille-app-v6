@@ -131,13 +131,22 @@ async function approveOrder(client: any, order: OrderRow, userId: string, allowP
 async function allocateFefo(client: any, order: OrderRow, userId: string) {
   if (!["approved", "partially_approved"].includes(order.status)) throw new Error("Csak elfogadott rendelés készíthető össze.");
   const locationId = await centralLocation(client, order.organization_id);
-  const items = await client.query(`select id,product_id,reserved_quantity from public.order_items where order_id=$1 order by id for update`, [order.id]);
+  const items = await client.query(`
+    select id,product_id,product_name_snapshot,unit_quantity,cancelled_quantity,fulfilled_quantity,reserved_quantity
+      from public.order_items
+     where order_id=$1
+     order by id
+     for update
+  `, [order.id]);
+  let totalRequired = 0;
   let totalReserved = 0;
   let totalAllocated = 0;
 
   for (const item of items.rows) {
+    const required = Math.max(0, Number(item.unit_quantity) - Number(item.cancelled_quantity) - Number(item.fulfilled_quantity));
     const existing = await client.query(`select coalesce(sum(quantity_units),0)::int value from public.order_item_lot_allocations where order_item_id=$1 and status in ('allocated','picked')`, [item.id]);
     let remaining = Math.max(0, Number(item.reserved_quantity) - Number(existing.rows[0]?.value ?? 0));
+    totalRequired += required;
     totalReserved += Number(item.reserved_quantity);
 
     if (remaining > 0) {
@@ -169,14 +178,15 @@ async function allocateFefo(client: any, order: OrderRow, userId: string) {
   }
 
   await client.query(`update public.order_item_lot_allocations set status='picked' where order_item_id in (select id from public.order_items where order_id=$1) and status='allocated'`, [order.id]);
-  const packed = totalReserved > 0 && totalAllocated >= totalReserved;
+  const packed = totalRequired > 0 && totalAllocated >= totalRequired;
   const updated = await client.query(`update public.orders set fulfillment_status=$2 where id=$1 returning *`, [order.id, packed ? "packed" : "picking"]);
-  return { ...updated.rows[0], allocation_complete: packed, allocated_units: totalAllocated, reserved_units: totalReserved };
+  return { ...updated.rows[0], allocation_complete: packed, allocated_units: totalAllocated, reserved_units: totalReserved, required_units: totalRequired };
 }
 
 async function deliverAll(client: any, order: OrderRow, userId: string) {
   if (!["packed", "partially_delivered"].includes(order.fulfillment_status)) throw new Error("Csak összekészített rendelés adható át.");
   const locationId = await centralLocation(client, order.organization_id);
+  await assertOrderFullyPicked(client, order.id);
   const existingDelivery = await client.query(`
     select * from public.deliveries
      where order_id=$1 and organization_id=$2 and status not in ('delivered','cancelled')
@@ -201,9 +211,10 @@ async function deliverAll(client: any, order: OrderRow, userId: string) {
 
   for (const item of items.rows) {
     const allocations = await client.query(`
-      select a.*,l.purchase_unit_price_huf,l.lot_number
+      select a.*,l.purchase_unit_price_huf,l.lot_number,c.carton_code
         from public.order_item_lot_allocations a join public.lots l on l.id=a.lot_id
-       where a.order_item_id=$1 and a.status='picked' order by l.best_before,l.id for update
+        left join public.inventory_cartons c on c.id=a.carton_id
+       where a.order_item_id=$1 and a.status='picked' order by l.best_before,l.id for update of a
     `, [item.id]);
     const deliveredUnits = allocations.rows.reduce((sum: number, row: any) => sum + Number(row.quantity_units), 0);
     if (deliveredUnits <= 0) continue;
@@ -224,8 +235,24 @@ async function deliverAll(client: any, order: OrderRow, userId: string) {
       await client.query(`
         insert into public.inventory_movements(organization_id,product_id,lot_id,location_id,movement_type,quantity_units,unit_cost_huf,reason,order_id,delivery_id,created_by)
         values($1,$2,$3,$4,'delivery_issue',$5,$6,'Partneri átadás',$7,$8,$9)
-      `, [order.organization_id, item.product_id, allocation.lot_id, locationId, -Number(allocation.quantity_units), Number(allocation.purchase_unit_price_huf ?? 0), order.id, delivery.id, userId]);
+      `, [order.organization_id, item.product_id, allocation.lot_id, allocation.location_id ?? locationId, -Number(allocation.quantity_units), Number(allocation.purchase_unit_price_huf ?? 0), order.id, delivery.id, userId]);
       await client.query(`update public.order_item_lot_allocations set status='delivered',delivered_at=now() where id=$1`, [allocation.id]);
+      if (allocation.carton_id) {
+        await client.query(`update public.inventory_cartons set status='delivered' where id=$1`, [allocation.carton_id]);
+        await client.query(`
+          insert into public.inventory_carton_events(
+            organization_id,carton_id,event_type,from_location_id,order_id,order_item_id,actor_user_id,note,event_data
+          ) values($1,$2,'delivered',$3,$4,$5,$6,'Partneri átadás rendelésből',$7::jsonb)
+        `, [
+          order.organization_id,
+          allocation.carton_id,
+          allocation.location_id,
+          order.id,
+          item.id,
+          userId,
+          JSON.stringify({ delivery_id: delivery.id, quantity_units: Number(allocation.quantity_units), carton_code: allocation.carton_code })
+        ]);
+      }
       await client.query(`
         update public.lots set status='depleted'
          where id=$1 and status='active'
@@ -247,6 +274,35 @@ async function deliverAll(client: any, order: OrderRow, userId: string) {
   return completed.rows[0];
 }
 
+async function assertOrderFullyPicked(client: any, orderId: number) {
+  const missing = await client.query(`
+    select
+      oi.product_name_snapshot,
+      greatest(oi.unit_quantity - oi.cancelled_quantity - oi.fulfilled_quantity, 0)::int as required_units,
+      oi.reserved_quantity::int as reserved_units,
+      coalesce(sum(a.quantity_units) filter (where a.status='picked'), 0)::int as picked_units
+    from public.order_items oi
+    left join public.order_item_lot_allocations a on a.order_item_id=oi.id
+    where oi.order_id=$1
+    group by oi.id
+    having greatest(oi.unit_quantity - oi.cancelled_quantity - oi.fulfilled_quantity, 0)
+      > coalesce(sum(a.quantity_units) filter (where a.status='picked'), 0)
+    order by oi.id
+  `, [orderId]);
+
+  if (!missing.rows.length) return;
+  const details = missing.rows.slice(0, 4).map((row: any) => {
+    const required = Number(row.required_units ?? 0);
+    const reserved = Number(row.reserved_units ?? 0);
+    const picked = Number(row.picked_units ?? 0);
+    const missingUnits = Math.max(0, required - picked);
+    const step = reserved < required ? "gyártás vagy készletre vétel szükséges" : "FEFO összekészítés szükséges";
+    return `${row.product_name_snapshot}: ${missingUnits} db hiányzik (${step})`;
+  }).join("; ");
+  const suffix = missing.rows.length > 4 ? `; további ${missing.rows.length - 4} tétel` : "";
+  throw new Error(`Az átadás nem indítható, mert nincs minden tétel teljes mennyiségben LOT-hoz rendelve. ${details}${suffix}.`);
+}
+
 async function cancelOrReject(client: any, order: OrderRow, userId: string, action: "cancel" | "reject", reason?: string) {
   const cleanReason = reason?.trim();
   if (!cleanReason || cleanReason.length < 5) throw new Error("Legalább 5 karakteres indoklás szükséges.");
@@ -255,6 +311,13 @@ async function cancelOrReject(client: any, order: OrderRow, userId: string, acti
   if (Number(delivered.rows[0]?.value ?? 0) > 0) throw new Error("Részben átadott rendelésnél csak a hátralévő mennyiség mondható le tételesen.");
 
   await client.query(`update public.stock_reservations set status='cancelled',released_at=now() where order_item_id in(select id from public.order_items where order_id=$1) and status='active'`, [order.id]);
+  await client.query(`
+    update public.inventory_cartons c
+       set status='in_stock'
+      from public.order_item_lot_allocations a
+      join public.order_items oi on oi.id=a.order_item_id
+     where a.carton_id=c.id and oi.order_id=$1 and a.status in('allocated','picked')
+  `, [order.id]);
   await client.query(`update public.order_item_lot_allocations set status='cancelled' where order_item_id in(select id from public.order_items where order_id=$1) and status in('allocated','picked')`, [order.id]);
   await client.query(`update public.order_items set cancelled_quantity=unit_quantity-fulfilled_quantity,reserved_quantity=0 where order_id=$1`, [order.id]);
   const status = action === "reject" ? "rejected" : "cancelled";

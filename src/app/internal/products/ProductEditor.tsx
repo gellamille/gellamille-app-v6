@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Product = {
@@ -18,6 +18,16 @@ type Product = {
   active: boolean;
 };
 
+type Draft = {
+  name: string;
+  unitsPerCarton: number;
+  netUnitPriceHuf: number;
+  purchaseUnitPriceHuf: number;
+  minimumStockUnits: number;
+  status: string;
+  active: boolean;
+};
+
 const statuses = [
   ["active", "Aktív"],
   ["seasonal", "Szezonális"],
@@ -26,62 +36,108 @@ const statuses = [
   ["discontinued", "Megszűnt"]
 ] as const;
 
+function draftFromProduct(product: Product): Draft {
+  return {
+    name: product.name ?? product.flavor_name,
+    unitsPerCarton: Number(product.units_per_carton),
+    netUnitPriceHuf: Number(product.net_unit_price_huf),
+    purchaseUnitPriceHuf: Number(product.purchase_unit_price_huf),
+    minimumStockUnits: Number(product.minimum_stock_units),
+    status: product.status,
+    active: product.active
+  };
+}
+
 export function ProductEditor({ products, canWrite }: { products: Product[]; canWrite: boolean }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
-  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [loadingIds, setLoadingIds] = useState<Set<number>>(new Set());
+  const [dirtyIds, setDirtyIds] = useState<Set<number>>(new Set());
+  const [drafts, setDrafts] = useState<Record<number, Draft>>(() => Object.fromEntries(products.map((product) => [product.id, draftFromProduct(product)])));
+  const dirtyCount = dirtyIds.size;
+  const savingAll = useMemo(() => dirtyCount > 0 && [...dirtyIds].every((id) => loadingIds.has(id)), [dirtyCount, dirtyIds, loadingIds]);
 
-  async function submit(event: FormEvent<HTMLFormElement>, productId: number) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const fd = new FormData(form);
-    setLoadingId(productId);
+  function updateDraft(productId: number, patch: Partial<Draft>) {
+    setDrafts((current) => ({ ...current, [productId]: { ...current[productId], ...patch } }));
+    setDirtyIds((current) => new Set(current).add(productId));
+  }
+
+  async function saveProduct(productId: number) {
+    const draft = drafts[productId];
+    setLoadingIds((current) => new Set(current).add(productId));
     setMessage("");
     const response = await fetch(`/api/products/${productId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: String(fd.get("name") ?? ""),
-        unitsPerCarton: Number(fd.get("unitsPerCarton")),
-        netUnitPriceHuf: Number(fd.get("netUnitPriceHuf")),
-        purchaseUnitPriceHuf: Number(fd.get("purchaseUnitPriceHuf")),
-        minimumStockUnits: Number(fd.get("minimumStockUnits")),
-        status: String(fd.get("status")),
-        active: fd.get("active") === "on"
-      })
+      body: JSON.stringify(draft)
     });
     const data = await response.json();
-    setLoadingId(null);
-    if (!response.ok) {
-      setMessage(data.error ?? "A termék mentése sikertelen.");
-      return;
+    setLoadingIds((current) => {
+      const next = new Set(current);
+      next.delete(productId);
+      return next;
+    });
+    if (!response.ok) throw new Error(data.error ?? "A termék mentése sikertelen.");
+    setDirtyIds((current) => {
+      const next = new Set(current);
+      next.delete(productId);
+      return next;
+    });
+  }
+
+  async function saveOne(productId: number) {
+    try {
+      await saveProduct(productId);
+      setMessage("A termék módosítva. A változás csak jövőbeli rendelésekre érvényes.");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "A termék mentése sikertelen.");
     }
-    setMessage("A termék módosítva. A változás csak jövőbeli rendelésekre érvényes.");
-    router.refresh();
+  }
+
+  async function saveAll() {
+    const ids = [...dirtyIds];
+    if (!ids.length) return;
+    try {
+      for (const id of ids) await saveProduct(id);
+      setMessage(`${ids.length} termék módosítása mentve. A változások csak jövőbeli rendelésekre érvényesek.`);
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "A termékek mentése sikertelen.");
+    }
   }
 
   return (
     <div className="stack">
-      {message ? <div className={message.includes("módosítva") ? "alert alert-success" : "alert alert-danger"}>{message}</div> : null}
+      {message ? <div className={message.includes("sikertelen") ? "alert alert-danger" : "alert alert-success"}>{message}</div> : null}
+      {canWrite ? (
+        <div className="card-title-row">
+          <div className="text-muted">{dirtyCount ? `${dirtyCount} nem mentett termékmódosítás` : "Nincs nem mentett módosítás"}</div>
+          <button className="button button-primary" disabled={!dirtyCount || savingAll} onClick={saveAll}>Minden módosítás mentése</button>
+        </div>
+      ) : null}
       <div className="table-wrap"><table><thead><tr><th>SKU</th><th>Terméknév</th><th>Méret</th><th>Karton</th><th>Nettó átadási ár</th><th>Nettó előállítási ár</th><th>Minimum készlet</th><th>Állapot</th><th>Aktív</th><th>Művelet</th></tr></thead><tbody>
-        {products.map((product) => (
-          <tr key={product.id}>
-            <td className="mono">{product.sku ?? `GM-${product.flavor_code}-${product.size_ml}`}</td>
-            <td>
-              {canWrite ? <form id={`product-${product.id}`} onSubmit={(event) => submit(event, product.id)} /> : null}
-              {canWrite ? <input form={`product-${product.id}`} name="name" defaultValue={product.name ?? product.flavor_name} required /> : product.name ?? product.flavor_name}
-            </td>
-            <td>{product.size_ml} ml</td>
-            <td>{canWrite ? <input form={`product-${product.id}`} name="unitsPerCarton" type="number" min="1" defaultValue={product.units_per_carton} required /> : `${product.units_per_carton} db`}</td>
-            <td>{canWrite ? <input form={`product-${product.id}`} name="netUnitPriceHuf" type="number" min="1" defaultValue={product.net_unit_price_huf} required /> : product.net_unit_price_huf}</td>
-            <td>{canWrite ? <input form={`product-${product.id}`} name="purchaseUnitPriceHuf" type="number" min="0" defaultValue={product.purchase_unit_price_huf} required /> : product.purchase_unit_price_huf}</td>
-            <td>{canWrite ? <input form={`product-${product.id}`} name="minimumStockUnits" type="number" min="0" defaultValue={product.minimum_stock_units} required /> : product.minimum_stock_units}</td>
-            <td>{canWrite ? <select form={`product-${product.id}`} name="status" defaultValue={product.status}>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : product.status}</td>
-            <td>{canWrite ? <input form={`product-${product.id}`} type="checkbox" name="active" defaultChecked={product.active} /> : product.active ? "Igen" : "Nem"}</td>
-            <td>{canWrite ? <button form={`product-${product.id}`} className="button button-small" disabled={loadingId === product.id}>Mentés</button> : "—"}</td>
-          </tr>
-        ))}
+        {products.map((product) => {
+          const draft = drafts[product.id] ?? draftFromProduct(product);
+          const loading = loadingIds.has(product.id);
+          const dirty = dirtyIds.has(product.id);
+          return (
+            <tr key={product.id}>
+              <td className="mono">{product.sku ?? `GM-${product.flavor_code}-${product.size_ml}`}</td>
+              <td>{canWrite ? <input value={draft.name} onChange={(event) => updateDraft(product.id, { name: event.target.value })} required /> : draft.name}</td>
+              <td>{product.size_ml} ml</td>
+              <td>{canWrite ? <input type="number" min="1" value={draft.unitsPerCarton} onChange={(event) => updateDraft(product.id, { unitsPerCarton: Number(event.target.value) })} required /> : `${draft.unitsPerCarton} db`}</td>
+              <td>{canWrite ? <input type="number" min="1" value={draft.netUnitPriceHuf} onChange={(event) => updateDraft(product.id, { netUnitPriceHuf: Number(event.target.value) })} required /> : draft.netUnitPriceHuf}</td>
+              <td>{canWrite ? <input type="number" min="0" value={draft.purchaseUnitPriceHuf} onChange={(event) => updateDraft(product.id, { purchaseUnitPriceHuf: Number(event.target.value) })} required /> : draft.purchaseUnitPriceHuf}</td>
+              <td>{canWrite ? <input type="number" min="0" value={draft.minimumStockUnits} onChange={(event) => updateDraft(product.id, { minimumStockUnits: Number(event.target.value) })} required /> : draft.minimumStockUnits}</td>
+              <td>{canWrite ? <select value={draft.status} onChange={(event) => updateDraft(product.id, { status: event.target.value })}>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : draft.status}</td>
+              <td>{canWrite ? <input type="checkbox" checked={draft.active} onChange={(event) => updateDraft(product.id, { active: event.target.checked })} /> : draft.active ? "Igen" : "Nem"}</td>
+              <td>{canWrite ? <button className="button button-small" disabled={!dirty || loading} onClick={() => saveOne(product.id)}>{loading ? "Mentés..." : "Mentés"}</button> : "—"}</td>
+            </tr>
+          );
+        })}
       </tbody></table></div>
+      {canWrite ? <button className="button button-primary" disabled={!dirtyCount || savingAll} onClick={saveAll}>Minden módosítás mentése</button> : null}
     </div>
   );
 }

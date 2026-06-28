@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { IceCreamBowl, ShoppingCart, ClipboardList, LogOut } from "lucide-react";
+import Image from "next/image";
+import { ShoppingCart, ClipboardList, LogOut } from "lucide-react";
 
 export function PartnerNav() {
   return (
     <header className="partner-nav">
       <Link href="/partner" className="brand">
-        <IceCreamBowl size={22} />
-        <span>Gellamille rendelés</span>
+        <Image className="partner-logo-image" src="/gellamille-logo.png" alt="Gellamille" width={3956} height={1062} priority />
       </Link>
       <nav>
         <Link href="/partner/catalog">Termékek</Link>

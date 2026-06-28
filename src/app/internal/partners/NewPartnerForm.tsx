@@ -2,11 +2,16 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
+function digitsOnly(value: string, maxLength?: number) {
+ const digits=value.replace(/\D/g,"");
+ return typeof maxLength==="number"?digits.slice(0,maxLength):digits;
+}
+
 export function NewPartnerForm(){
- const router=useRouter();const[message,setMessage]=useState("");const[loading,setLoading]=useState(false);const[open,setOpen]=useState(false);const[temporaryPassword,setTemporaryPassword]=useState("");const[username,setUsername]=useState("");
+ const router=useRouter();const[message,setMessage]=useState("");const[loading,setLoading]=useState(false);const[open,setOpen]=useState(false);const[username,setUsername]=useState("");const[temporaryPassword,setTemporaryPassword]=useState("");
  async function submit(event:FormEvent<HTMLFormElement>){
   event.preventDefault();const form=event.currentTarget;const fd=new FormData(form);setLoading(true);setMessage("");
-  setTemporaryPassword("");setUsername("");
+  setUsername("");setTemporaryPassword("");
   const response=await fetch("/api/partners",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
    name:String(fd.get("name")),billingName:String(fd.get("billingName")??""),taxNumber:String(fd.get("taxNumber")??""),
    contactName:String(fd.get("contactName")??""),email:String(fd.get("email")??""),phone:String(fd.get("phone")??""),
@@ -15,7 +20,7 @@ export function NewPartnerForm(){
    minimumOrderCartons:Number(fd.get("minimumOrderCartons")),overduePolicy:String(fd.get("overduePolicy")),
    deliveryWeekdays:fd.getAll("deliveryWeekdays").map(value=>Number(value)),cutoffBusinessDays:Number(fd.get("cutoffBusinessDays")),note:String(fd.get("note")??"")
   })});const data=await response.json();setLoading(false);
-  if(!response.ok){setMessage(data.error??"A mentés sikertelen.");return;}form.reset();setUsername(data.username??"");setTemporaryPassword(data.temporaryPassword??"");setMessage("A partner és a partneri belépés létrejött. Az ideiglenes jelszó csak most látható.");router.refresh();
+  if(!response.ok){setMessage(data.error??"A mentés sikertelen.");return;}form.reset();setUsername(data.username??"");setTemporaryPassword(data.temporaryPassword??"");setMessage("A partner és a partneri belépés létrejött. Az ideiglenes jelszó 8 napig érvényes, a partner első belépés után saját jelszót állít be.");router.refresh();
  }
  return <>
   <button className="button button-primary" onClick={()=>setOpen(true)}>Új partner</button>
@@ -24,8 +29,9 @@ export function NewPartnerForm(){
    <form className="stack" onSubmit={submit}><div className="form-grid">
     <label>Partner neve<input name="name" required /></label><label>Számlázási név<input name="billingName" /></label>
     <label>Adószám<input name="taxNumber" /></label><label>Kapcsolattartó<input name="contactName" /></label>
-    <label>Felhasználónév / e-mail<input name="email" type="email" required /></label><label>Telefon<input name="phone" /></label>
-    <label>Irányítószám<input name="postalCode" required /></label><label>Város<input name="city" required /></label>
+    <label className="full">E-mail<input name="email" type="email" pattern="[^@\s]+@[^@\s]+\.[^@\s]+" required /></label>
+    <label>Telefon<input name="phone" inputMode="numeric" pattern="[0-9]*" onInput={(event)=>{event.currentTarget.value=digitsOnly(event.currentTarget.value);}} /></label>
+    <label>Irányítószám<input name="postalCode" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} required onInput={(event)=>{event.currentTarget.value=digitsOnly(event.currentTarget.value,4);}} /></label><label>Város<input name="city" required /></label>
     <label className="full">Szállítási cím<input name="addressLine1" required /></label>
     <label>Fizetési mód<select name="paymentMethod"><option value="bank_transfer">Átutalás</option><option value="cash_on_delivery">Készpénz átadáskor</option><option value="card_on_delivery">Kártya átadáskor</option></select></label>
     <label>Fizetési határidő<input name="paymentTermsDays" type="number" min="0" defaultValue="8" required /></label>
@@ -43,7 +49,7 @@ export function NewPartnerForm(){
     <label>Rendelési zárás nap<input name="cutoffBusinessDays" type="number" min="0" defaultValue="2" required /></label>
     <label className="full">Megjegyzés<textarea name="note" /></label>
    </div>{message?<div className={message.includes("létrejött")?"alert alert-success":"alert alert-danger"}>{message}</div>:null}
-   {temporaryPassword?<div className="temporary-password"><div><strong>Felhasználónév:</strong> <span className="mono">{username}</span></div><div><strong>Ideiglenes jelszó:</strong> <span className="mono">{temporaryPassword}</span></div></div>:null}
+   {username?<div className="temporary-password"><div><strong>Belépési e-mail:</strong> <span className="mono">{username}</span></div><div><strong>Ideiglenes jelszó:</strong> <span className="mono">{temporaryPassword}</span></div><div>Lejárat: 8 nap, vagy amíg a partner saját jelszót nem állít be.</div></div>:null}
    <button className="button button-primary" disabled={loading}>Partner létrehozása</button></form>
   </div></div>:null}
  </>;
