@@ -1,11 +1,9 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
-import { Code39Barcode } from "@/components/barcode/Code39Barcode";
 import { query } from "@/lib/db";
-import { dateHU } from "@/lib/format";
 import { requireAppUser } from "@/lib/auth";
-import { PrintLabelsButton } from "./PrintLabelsButton";
 import { GenerateCartonsButton } from "./GenerateCartonsButton";
+import { CartonLabelManager } from "./CartonLabelManager";
 
 type LotRow = {
   id: number;
@@ -81,11 +79,6 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
         actions={
           <>
             <GenerateCartonsButton lotId={lot.id} remainingUnits={remainingUnits} unitsPerCarton={lot.units_per_carton} />
-            <PrintLabelsButton
-              lotId={lot.id}
-              cartonIds={cartons.map((carton) => carton.id)}
-              unprintedCartonIds={unprintedCartons.map((carton) => carton.id)}
-            />
           </>
         }
       />
@@ -100,26 +93,7 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
         {!cartons.length ? <div className="alert alert-warning">Ehhez a LOT-hoz még nincs létrehozott karton. Indítsd a kartonozás/címkék generálását.</div> : null}
       </section>
 
-      <section className="label-sheet">
-        {cartons.map((carton) => (
-          <article className={`carton-label ${carton.printed_at ? "is-printed" : "is-unprinted"}`} key={carton.id}>
-            <div className="label-brand">Gellamille</div>
-            <div className="label-product">{lot.product_name}</div>
-            <div className="label-muted">{lot.size_ml} ml · {carton.quantity_units} db / karton</div>
-            <div className="label-grid">
-              <span>LOT</span><strong>{lot.lot_number}</strong>
-              <span>Karton</span><strong>{carton.carton_code}</strong>
-              <span>Gyártás</span><strong>{dateHU(lot.production_date)}</strong>
-              <span>Lejárat</span><strong>{dateHU(lot.best_before)}</strong>
-              <span>Hely</span><strong>{carton.location_name ?? lot.location_name ?? "Központi raktár"}</strong>
-            </div>
-            <Code39Barcode value={carton.carton_code} />
-            <div className="label-code">{carton.carton_code}</div>
-            <div className="label-footer">Fagyasztva tárolandó · {lot.product_code}</div>
-            {carton.printed_at ? <div className="label-reprint">Újranyomtatás</div> : null}
-          </article>
-        ))}
-      </section>
+      <CartonLabelManager lot={lot} cartons={cartons} />
     </div>
   );
 }

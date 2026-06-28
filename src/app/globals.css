@@ -279,6 +279,18 @@ textarea { min-height: 95px; resize: vertical; }
 .event-meta strong { color: var(--ink); }
 .empty-inline { color: var(--muted); border: 1px dashed #ccd3ce; border-radius: 10px; padding: 18px; text-align: center; }
 .print-actions { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.label-manager { display: grid; gap: 16px; }
+.label-summary-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.label-summary-row span { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; color: var(--muted); font-size: 12px; font-weight: 850; background: var(--surface-soft); }
+.label-table-wrap table { min-width: 680px; }
+.print-only-labels {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 100mm;
+  height: 70mm;
+  overflow: hidden;
+}
 .label-sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; margin-top: 18px; }
 .carton-label {
   position: relative;
@@ -449,8 +461,11 @@ textarea { min-height: 95px; resize: vertical; }
   :root, body { background: white; }
   .sidebar, .topbar, .page-header, .print-hide, .print-actions { display: none !important; }
   .app-shell, .content, .page, .labels-page { display: block; min-height: 0; padding: 0; margin: 0; max-width: none; }
+  .label-manager { display: block; }
+  .print-only-labels { position: static; width: auto; height: auto; overflow: visible; }
   .label-sheet { display: block; margin: 0; }
   body.print-unprinted-only .carton-label.is-printed { display: none; }
+  body.print-selected-labels .carton-label:not(.is-print-selected) { display: none; }
   .carton-label {
     width: 100mm;
     height: 70mm;
