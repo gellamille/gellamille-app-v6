@@ -5,7 +5,8 @@ import { apiError } from "@/lib/http";
 import { transaction } from "@/lib/db";
 
 const schema = z.object({
-  lotId: z.number().int().positive()
+  lotId: z.number().int().positive(),
+  quantityUnits: z.number().int().positive().optional()
 });
 
 export async function POST(request: Request) {
@@ -50,9 +51,13 @@ export async function POST(request: Request) {
       const existingUnits = Number(existingResult.rows[0]?.carton_units ?? 0);
       const remainingUnits = Number(lot.quantity ?? 0) - existingUnits;
       if (remainingUnits <= 0) throw new Error("Ehhez a LOT-hoz már nincs kartonozatlan mennyiség.");
+      const quantityUnits = input.quantityUnits ?? remainingUnits;
+      if (quantityUnits > remainingUnits) {
+        throw new Error(`Legfeljebb ${remainingUnits} db kartonozható ebből a LOT-ból.`);
+      }
 
-      const fullCartons = Math.floor(remainingUnits / unitsPerCarton);
-      const remainderUnits = remainingUnits % unitsPerCarton;
+      const fullCartons = Math.floor(quantityUnits / unitsPerCarton);
+      const remainderUnits = quantityUnits % unitsPerCarton;
       const cartonQuantities = [
         ...Array.from({ length: fullCartons }, () => unitsPerCarton),
         ...(remainderUnits > 0 ? [remainderUnits] : [])
@@ -91,6 +96,7 @@ export async function POST(request: Request) {
         product_name: lot.product_name,
         generated: generated.rows[0],
         remaining_units_before: remainingUnits,
+        requested_carton_units: quantityUnits,
         units_per_carton: unitsPerCarton
       })]);
 

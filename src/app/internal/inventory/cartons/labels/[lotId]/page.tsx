@@ -80,7 +80,7 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
         actions={
           <>
             <Link href="/internal/production" className="button">Vissza a LOT listához</Link>
-            <GenerateCartonsButton lotId={lot.id} remainingUnits={remainingUnits} />
+            <GenerateCartonsButton lotId={lot.id} remainingUnits={remainingUnits} unitsPerCarton={lot.units_per_carton} />
             <PrintLabelsButton
               lotId={lot.id}
               cartonIds={cartons.map((carton) => carton.id)}
@@ -93,7 +93,7 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
       <section className="card print-hide">
         <h2>Előnézet</h2>
         <p className="text-muted">
-          Itt történik a fizikai kartonozás adminisztrációja: a még kartonozatlan LOT mennyiségből karton rekordok és címkék készülnek.
+          Itt történik a fizikai kartonozás adminisztrációja: add meg, ebből a LOT-ból most ténylegesen hány darabot kartonoztatok.
           A nyomtatás 100 × 70 mm-es kartoncímkére van optimalizálva, a vonalkód tartalma csak a karton azonosító.
         </p>
         <p className="text-muted">{remainingUnits} db még kartonozatlan · {cartonUnits} db kartonban · {unprintedCartons.length} még nem nyomtatott címke · {cartons.length - unprintedCartons.length} korábban nyomtatott címke.</p>
