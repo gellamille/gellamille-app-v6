@@ -36,19 +36,21 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
   const [previewIds, setPreviewIds] = useState<number[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"success" | "error">("success");
 
-  const previewCartons = previewIds ? cartons.filter((carton) => previewIds.includes(carton.id)) : [];
+  const previewCartons = previewIds ? cartons.filter((carton) => previewIds.includes(normalizeId(carton.id))) : [];
 
   useEffect(() => {
-    setSelectedIds(unprintedCartons.map((carton) => carton.id));
+    setSelectedIds(unprintedCartons.map((carton) => normalizeId(carton.id)));
   }, [unprintedCartons]);
 
   function toggleCarton(id: number) {
-    setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+    const normalizedId = normalizeId(id);
+    setSelectedIds((current) => current.includes(normalizedId) ? current.filter((value) => value !== normalizedId) : [...current, normalizedId]);
   }
 
   function selectOnly(ids: number[]) {
-    setSelectedIds(ids);
+    setSelectedIds(normalizeIds(ids));
   }
 
   function markPrintSelection(ids: number[]) {
@@ -58,11 +60,13 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
   }
 
   async function printLabels(ids: number[]) {
-    if (!ids.length) {
+    const normalizedIds = normalizeIds(ids);
+    if (!normalizedIds.length) {
+      setMessageType("error");
       setMessage("Válassz ki legalább egy címkét a nyomtatáshoz.");
       return;
     }
-    const reprintCount = cartons.filter((carton) => ids.includes(carton.id) && carton.printed_at).length;
+    const reprintCount = cartons.filter((carton) => normalizedIds.includes(normalizeId(carton.id)) && carton.printed_at).length;
     if (reprintCount > 0 && !window.confirm(`${reprintCount} korábban nyomtatott címke is ki van jelölve. Mehet az újranyomtatás?`)) return;
 
     setLoading(true);
@@ -70,17 +74,19 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
     const response = await fetch("/api/inventory/cartons/labels/print", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lotId: lot.id, cartonIds: ids })
+      body: JSON.stringify({ lotId: normalizeId(lot.id), cartonIds: normalizedIds })
     });
     const data = await response.json();
     setLoading(false);
     if (!response.ok) {
+      setMessageType("error");
       setMessage(data.error ?? "A címkenyomtatás naplózása sikertelen.");
       return;
     }
 
-    setMessage(`${data.printed ?? ids.length} címke nyomtatása indítva.`);
-    markPrintSelection(ids);
+    setMessageType("success");
+    setMessage(`${data.printed ?? normalizedIds.length} címke nyomtatása indítva.`);
+    markPrintSelection(normalizedIds);
     document.body.classList.add("print-selected-labels");
     const cleanup = () => {
       document.body.classList.remove("print-selected-labels");
@@ -115,7 +121,7 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
           <span>{printedCartons.length} nyomtatott</span>
           <span>{selectedIds.length} kijelölve</span>
         </div>
-        {message ? <div className={message.includes("sikertelen") || message.includes("Válassz") ? "alert alert-danger" : "alert alert-success"}>{message}</div> : null}
+        {message ? <div className={messageType === "error" ? "alert alert-danger" : "alert alert-success"}>{message}</div> : null}
       </section>
 
       <CartonTable
@@ -127,8 +133,8 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
         onPreview={(id) => setPreviewIds([id])}
         toolbar={
           <>
-            <button className="button button-small" type="button" onClick={() => selectOnly(unprintedCartons.map((carton) => carton.id))} disabled={!unprintedCartons.length}>Nyomtatatlanok kijelölése</button>
-            <button className="button button-small button-primary" type="button" onClick={() => printLabels(unprintedCartons.map((carton) => carton.id))} disabled={loading || !unprintedCartons.length}>Új címkék nyomtatása</button>
+            <button className="button button-small" type="button" onClick={() => selectOnly(unprintedCartons.map((carton) => normalizeId(carton.id)))} disabled={!unprintedCartons.length}>Nyomtatatlanok kijelölése</button>
+            <button className="button button-small button-primary" type="button" onClick={() => printLabels(unprintedCartons.map((carton) => normalizeId(carton.id)))} disabled={loading || !unprintedCartons.length}>Új címkék nyomtatása</button>
           </>
         }
       />
@@ -142,8 +148,8 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
         onPreview={(id) => setPreviewIds([id])}
         toolbar={
           <>
-            <button className="button button-small" type="button" onClick={() => selectOnly(printedCartons.map((carton) => carton.id))} disabled={!printedCartons.length}>Nyomtatottak kijelölése</button>
-            <button className="button button-small" type="button" onClick={() => setPreviewIds(printedCartons.map((carton) => carton.id))} disabled={!printedCartons.length}>Nyomtatottak előnézete</button>
+            <button className="button button-small" type="button" onClick={() => selectOnly(printedCartons.map((carton) => normalizeId(carton.id)))} disabled={!printedCartons.length}>Nyomtatottak kijelölése</button>
+            <button className="button button-small" type="button" onClick={() => setPreviewIds(printedCartons.map((carton) => normalizeId(carton.id)))} disabled={!printedCartons.length}>Nyomtatottak előnézete</button>
           </>
         }
       />
@@ -207,7 +213,7 @@ function CartonTable({
             <tbody>
               {cartons.map((carton) => (
                 <tr key={carton.id}>
-                  <td><input type="checkbox" checked={selectedIds.includes(carton.id)} onChange={() => onToggle(carton.id)} aria-label={`${carton.carton_code} kijelölése`} /></td>
+                  <td><input type="checkbox" checked={selectedIds.includes(normalizeId(carton.id))} onChange={() => onToggle(normalizeId(carton.id))} aria-label={`${carton.carton_code} kijelölése`} /></td>
                   <td className="mono">{carton.carton_code}</td>
                   <td>{carton.quantity_units} db</td>
                   <td>{carton.location_name ?? "Központi raktár"}</td>
@@ -221,6 +227,14 @@ function CartonTable({
       ) : <div className="empty-inline">{emptyText}</div>}
     </section>
   );
+}
+
+function normalizeId(id: number | string) {
+  return Number(id);
+}
+
+function normalizeIds(ids: Array<number | string>) {
+  return ids.map(normalizeId).filter((id) => Number.isInteger(id) && id > 0);
 }
 
 function LabelSheet({ lot, cartons }: { lot: Lot; cartons: Carton[] }) {

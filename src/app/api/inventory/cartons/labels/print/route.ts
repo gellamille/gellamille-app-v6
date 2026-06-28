@@ -5,8 +5,8 @@ import { apiError } from "@/lib/http";
 import { transaction } from "@/lib/db";
 
 const schema = z.object({
-  lotId: z.number().int().positive(),
-  cartonIds: z.array(z.number().int().positive()).min(1)
+  lotId: z.coerce.number().int().positive(),
+  cartonIds: z.array(z.coerce.number().int().positive()).min(1)
 });
 
 export async function POST(request: Request) {
