@@ -58,6 +58,7 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
      where c.organization_id=$1 and c.lot_id=$2 and c.archived_at is null
      order by c.carton_code
   `, [user.organization_id, id]) : [];
+  const unprintedCartons = cartons.filter((carton) => !carton.printed_at);
 
   if (!lot) {
     return (
@@ -76,7 +77,11 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
         actions={
           <>
             <Link href="/internal/production" className="button">Vissza a LOT listához</Link>
-            <PrintLabelsButton lotId={lot.id} cartonIds={cartons.map((carton) => carton.id)} />
+            <PrintLabelsButton
+              lotId={lot.id}
+              cartonIds={cartons.map((carton) => carton.id)}
+              unprintedCartonIds={unprintedCartons.map((carton) => carton.id)}
+            />
           </>
         }
       />
@@ -87,12 +92,13 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
           A nyomtatás 100 × 70 mm-es kartoncímkére van optimalizálva. A vonalkód tartalma csak a karton azonosító,
           az összes részletes adat a rendszerből kérhető vissza.
         </p>
+        <p className="text-muted">{unprintedCartons.length} új címke · {cartons.length - unprintedCartons.length} korábban nyomtatott címke.</p>
         {!cartons.length ? <div className="alert alert-warning">Ehhez a LOT-hoz még nincs létrehozott karton.</div> : null}
       </section>
 
       <section className="label-sheet">
         {cartons.map((carton) => (
-          <article className="carton-label" key={carton.id}>
+          <article className={`carton-label ${carton.printed_at ? "is-printed" : "is-unprinted"}`} key={carton.id}>
             <div className="label-brand">Gellamille</div>
             <div className="label-product">{lot.product_name}</div>
             <div className="label-muted">{lot.size_ml} ml · {carton.quantity_units} db / karton</div>

@@ -81,6 +81,7 @@ export default async function CartonsPage({ searchParams }: { searchParams: Prom
         description="Fizikai kartonok állapota, raktárhelye, LOT-ja és rendeléshez kötése."
         actions={
           <>
+            <Link className="button" href="/internal/inventory/cartons/setup">Beüzemelés</Link>
             <Link className="button" href="/internal/inventory/cartons/scanner-test">Scanner teszt</Link>
             <Link className="button button-secondary" href="/internal/inventory/cartons/check">Karton ellenőrzés</Link>
             <Link className="button button-primary" href="/internal/inventory/cartons/move">Karton áthelyezés</Link>
@@ -115,7 +116,7 @@ export default async function CartonsPage({ searchParams }: { searchParams: Prom
             <tbody>
               {cartons.map((carton) => (
                 <tr key={carton.id}>
-                  <td className="mono">{carton.carton_code}</td>
+                  <td><Link className="mono" href={`/internal/inventory/cartons/${carton.id}`}>{carton.carton_code}</Link></td>
                   <td>{carton.product_name}<div className="text-muted mono">{carton.product_code} · {carton.size_ml} ml</div></td>
                   <td><Link className="mono" href={`/internal/inventory/cartons/labels/${carton.lot_id}`}>{carton.lot_number}</Link><div className="text-muted">{dateHU(carton.best_before)}</div></td>
                   <td>{carton.location_name ?? "—"}<div className="text-muted mono">{carton.location_code ?? ""}</div></td>

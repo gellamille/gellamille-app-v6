@@ -11,7 +11,7 @@ import { OrderCartonPicker } from "./OrderCartonPicker";
 import { UnpickCartonButton } from "./UnpickCartonButton";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAppUser(INTERNAL_ROLES);
+  const user = await requireAppUser(INTERNAL_ROLES);
 
   const { id } = await params;
   const order = await one<any>(`
@@ -64,6 +64,22 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
      where oi.order_id=$1
      order by oi.id,l.best_before,l.lot_number
   `, [id]);
+  const cartonPickEvents = await query<any>(`
+    select e.id,e.event_type,e.note,e.created_at,
+           e.event_data->>'quantity_units' as quantity_units,
+           c.id as carton_id,c.carton_code,
+           l.lot_number,
+           oi.product_name_snapshot,
+           au.display_name as actor_name
+      from public.inventory_carton_events e
+      join public.inventory_cartons c on c.id=e.carton_id
+      left join public.lots l on l.id=c.lot_id
+      left join public.order_items oi on oi.id=e.order_item_id
+      left join public.app_users au on au.user_id=e.actor_user_id
+     where e.organization_id=$1 and e.order_id=$2 and e.event_type in ('picked','unpicked')
+     order by e.created_at desc,e.id desc
+     limit 50
+  `, [user.organization_id, id]);
   const itemReadiness = items.map((item) => {
     const remaining = Math.max(0, Number(item.unit_quantity ?? 0) - Number(item.cancelled_quantity ?? 0) - Number(item.fulfilled_quantity ?? 0));
     const reserved = Number(item.reserved_quantity ?? 0);
@@ -193,6 +209,30 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             </table>
           </div>
         </details>
+      </section>
+
+      <section className="card section-gap">
+        <h2>Összekészítési műveleti napló</h2>
+        <div className="event-list">
+          {cartonPickEvents.map((event) => (
+            <div className="event-row" key={event.id}>
+              <div>
+                <strong>{event.event_type === "unpicked" ? "Visszavonva" : "Összekészítve"}</strong>
+                <div>
+                  <Link className="mono" href={`/internal/inventory/cartons/${event.carton_id}`}>{event.carton_code}</Link>
+                  <span className="text-muted"> · {event.quantity_units ?? "—"} db</span>
+                </div>
+                <div className="text-muted">{event.product_name_snapshot ?? "Termék nélkül"} · LOT {event.lot_number ?? "—"}</div>
+                {event.note ? <div className="text-muted">{event.note}</div> : null}
+              </div>
+              <div className="event-meta">
+                <strong>{event.actor_name ?? "Rendszer"}</strong>
+                <span>{dateTimeHU(event.created_at)}</span>
+              </div>
+            </div>
+          ))}
+          {!cartonPickEvents.length ? <div className="empty-inline">Ehhez a rendeléshez még nincs scanneres karton művelet.</div> : null}
+        </div>
       </section>
 
       <section className="grid grid-2 section-gap">
