@@ -32,6 +32,15 @@ export async function POST(request:Request){
    let quantity=input.quantityUnits;
    if(consumption.has(input.movementType)) quantity=-Math.abs(quantity);
    if(input.movementType!=="correction"&&input.quantityUnits<0) quantity=-Math.abs(input.quantityUnits);
+   if(quantity<0){
+    const locationBalance=await client.query<{value:number}>(`
+     select coalesce(sum(quantity_units),0)::int value
+       from public.inventory_movements
+      where lot_id=$1 and location_id=$2 and archived_at is null
+    `,[lot.id,input.locationId]);
+    const available=Number(locationBalance.rows[0]?.value??0);
+    if(available+quantity<0)throw new Error(`Ezen a készlethelyen csak ${available} db van ebből a LOT-ból. Válassz másik készlethelyet, vagy előbb helyezd át a készletet.`);
+   }
    const movement=await client.query<any>(`
     insert into public.inventory_movements(
      organization_id,product_id,lot_id,location_id,movement_type,quantity_units,unit_cost_huf,reason,created_by

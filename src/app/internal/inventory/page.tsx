@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { query } from "@/lib/db";
-import { dateHU } from "@/lib/format";
+import { dateHU, dateTimeHU } from "@/lib/format";
 import { requireAppUser } from "@/lib/auth";
 import { InventoryAdjustmentForm } from "./InventoryAdjustmentForm";
 import { InventorySettingsForm } from "./InventorySettingsForm";
@@ -22,6 +22,21 @@ const stockSignalLabels: Record<string, string> = {
   stock_medium: "Közepes",
   stock_high: "Magas",
   stock_overstock: "Túlteljesített",
+};
+
+const movementLabels: Record<string, string> = {
+  correction: "Korrekció",
+  sample: "Partneri minta",
+  marketing: "Marketing / fotózás",
+  tasting: "Kóstoltatás",
+  internal_use: "Belső felhasználás",
+  damage: "Sérülés",
+  scrap: "Selejt",
+  production: "Gyártás",
+  sale: "Értékesítés",
+  transfer_out: "Áthelyezés ki",
+  transfer_in: "Áthelyezés be",
+  recall: "Visszahívás"
 };
 
 function stockSignal(available: number, minimum: number, settings: any) {
@@ -74,7 +89,17 @@ export default async function InventoryPage() {
      limit 250
   `);
   const correctionLots = canAdjust ? await query<any>(`
-    select l.id,l.lot_number,p.name as product_name,coalesce(v.physical_units,0)::int as physical_units
+    select l.id,l.lot_number,p.name as product_name,coalesce(v.physical_units,0)::int as physical_units,
+           coalesce((
+             select jsonb_object_agg(location_id, balance)
+               from (
+                 select im.location_id,coalesce(sum(im.quantity_units),0)::int as balance
+                   from public.inventory_movements im
+                  where im.lot_id=l.id and im.archived_at is null
+                  group by im.location_id
+                 having coalesce(sum(im.quantity_units),0) <> 0
+               ) balances
+           ),'{}'::jsonb) as location_balances
       from public.lots l
       join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml
       left join public.v_lot_stock_summary v on v.lot_id=l.id
@@ -82,6 +107,20 @@ export default async function InventoryPage() {
      order by l.best_before,l.id
   `) : [];
   const locations = canAdjust ? await query<any>(`select id,name from public.inventory_locations where active order by name`) : [];
+  const recentMovements = await query<any>(`
+    select im.id,im.movement_type,im.quantity_units,im.reason,im.created_at,
+           l.lot_number,p.name as product_name,p.code as product_code,
+           loc.name as location_name,
+           au.display_name as created_by_name
+      from public.inventory_movements im
+      join public.lots l on l.id=im.lot_id
+      join public.products p on p.id=im.product_id
+      left join public.inventory_locations loc on loc.id=im.location_id
+      left join public.app_users au on au.user_id=im.created_by
+     where im.organization_id=$1 and im.archived_at is null
+     order by im.created_at desc,im.id desc
+     limit 30
+  `, [user.organization_id]);
 
   return (
     <div className="page">
@@ -99,6 +138,27 @@ export default async function InventoryPage() {
       />
       {canAdjust ? <InventoryAdjustmentForm lots={correctionLots} locations={locations} /> : null}
       {canAdjust ? <InventorySettingsForm settings={settings} /> : null}
+
+      <section className="section-gap">
+        <h2>Legutóbbi készletmozgások</h2>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Időpont</th><th>LOT</th><th>Termék</th><th>Hely</th><th>Típus</th><th>Darab</th><th>Indok</th><th>Rögzítette</th></tr></thead>
+            <tbody>{recentMovements.map((movement) => (
+              <tr key={movement.id}>
+                <td>{dateTimeHU(movement.created_at)}</td>
+                <td className="mono">{movement.lot_number}</td>
+                <td>{movement.product_name}<div className="mono text-muted">{movement.product_code}</div></td>
+                <td>{movement.location_name ?? "—"}</td>
+                <td>{movementLabels[movement.movement_type] ?? movement.movement_type}</td>
+                <td className={Number(movement.quantity_units) < 0 ? "text-danger" : "text-success"}>{Number(movement.quantity_units) > 0 ? "+" : ""}{movement.quantity_units} db</td>
+                <td>{movement.reason ?? "—"}</td>
+                <td>{movement.created_by_name ?? "Rendszer"}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </section>
 
       <section>
         <h2>Termékkészlet</h2>
