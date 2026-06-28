@@ -21,6 +21,11 @@ export function OrderActions({
   const [message, setMessage] = useState("");
   const canApprove = status === "submitted" || status === "stock_shortage" || (status === "partially_approved" && hasMissingReservation);
   const canPick = (status === "approved" || status === "partially_approved") && !canDeliver && !["delivered", "cancelled"].includes(fulfillmentStatus);
+  const approveLabel = status === "stock_shortage"
+    ? "Készlet újraellenőrzése és foglalás"
+    : status === "partially_approved"
+      ? "Hiányzó készlet újrafoglalása"
+      : "Elfogadás és foglalás";
 
   async function action(name: string, extra: Record<string, unknown> = {}) {
     setBusy(true);
@@ -43,7 +48,7 @@ export function OrderActions({
     <div className="inline">
       {canApprove ? (
         <button className="button button-primary" disabled={busy} onClick={() => action("approve", { allowPartial: true })}>
-          {status === "partially_approved" ? "Hiányzó készlet újrafoglalása" : "Elfogadás és foglalás"}
+          {approveLabel}
         </button>
       ) : null}
       {canPick ? (

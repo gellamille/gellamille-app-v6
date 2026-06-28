@@ -98,6 +98,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const readinessIssues = activeItems.filter((item) => item.issue);
   const hasMissingReservation = activeItems.some((item) => item.missingReservation > 0);
   const canDeliver = activeItems.length > 0 && readinessIssues.length === 0;
+  const canRecall = ["partially_delivered", "delivered"].includes(order.fulfillment_status)
+    || items.some((item) => Number(item.fulfilled_quantity ?? 0) > 0);
   const canScanPick = ["approved", "partially_approved"].includes(order.status) && !["delivered", "cancelled"].includes(order.fulfillment_status);
   const canEditOrder = !["closed", "cancelled", "void"].includes(order.status) && !["delivered", "cancelled"].includes(order.fulfillment_status) && !["receivable", "paid", "partially_paid", "overdue", "void"].includes(order.finance_status);
 
@@ -106,7 +108,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <PageHeader
         title={order.order_number}
         description={`${order.partner_name} · Kért szállítás: ${dateWithWeekdayHU(order.requested_delivery_date)}`}
-        actions={<><OrderActions orderId={Number(id)} status={order.status} fulfillmentStatus={order.fulfillment_status} canDeliver={canDeliver} hasMissingReservation={hasMissingReservation} />{canEditOrder ? <Link className="button" href={`/internal/orders/${id}/edit`}>Szerkesztés</Link> : null}{canEditOrder ? <DeleteOrderButton orderId={Number(id)} /> : null}<Link className="button button-danger" href={`/internal/recalls?orderId=${id}`}>Visszahívás</Link></>}
+        actions={<><OrderActions orderId={Number(id)} status={order.status} fulfillmentStatus={order.fulfillment_status} canDeliver={canDeliver} hasMissingReservation={hasMissingReservation} />{canEditOrder ? <Link className="button" href={`/internal/orders/${id}/edit`}>Szerkesztés</Link> : null}{canEditOrder ? <DeleteOrderButton orderId={Number(id)} /> : null}{canRecall ? <Link className="button button-danger" href={`/internal/recalls?orderId=${id}`}>Visszahívás</Link> : null}</>}
       />
       {readinessIssues.length ? (
         <section className="alert alert-warning section-gap">
