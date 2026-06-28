@@ -89,10 +89,10 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
       <section className="card print-hide">
         <h2>Előnézet</h2>
         <p className="text-muted">
-          A nyomtatás 100 × 70 mm-es kartoncímkére van optimalizálva. A vonalkód tartalma csak a karton azonosító,
-          az összes részletes adat a rendszerből kérhető vissza.
+          Ez az oldal csak ennek a LOT-nak a kartoncímkéit kezeli. A nyomtatás 100 × 70 mm-es kartoncímkére van optimalizálva,
+          a vonalkód tartalma csak a karton azonosító.
         </p>
-        <p className="text-muted">{unprintedCartons.length} új címke · {cartons.length - unprintedCartons.length} korábban nyomtatott címke.</p>
+        <p className="text-muted">{unprintedCartons.length} még nem nyomtatott címke · {cartons.length - unprintedCartons.length} korábban nyomtatott címke.</p>
         {!cartons.length ? <div className="alert alert-warning">Ehhez a LOT-hoz még nincs létrehozott karton.</div> : null}
       </section>
 

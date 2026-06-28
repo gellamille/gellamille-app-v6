@@ -16,6 +16,7 @@ export function PrintLabelsButton({
 
   async function printLabels(ids: number[], mode: "all" | "unprinted") {
     if (!ids.length) return;
+    if (mode === "all" && !window.confirm("Biztosan újranyomtatod az összes címkét ehhez a LOT-hoz?")) return;
     setLoading(true);
     setMessage("");
     const response = await fetch("/api/inventory/cartons/labels/print", {
@@ -29,7 +30,7 @@ export function PrintLabelsButton({
       setMessage(data.error ?? "A nyomtatás naplózása sikertelen.");
       return;
     }
-    setMessage(`${data.printed ?? ids.length} címke naplózva.`);
+    setMessage(`${data.printed ?? ids.length} címke nyomtatása indítva.`);
     if (mode === "unprinted") document.body.classList.add("print-unprinted-only");
     const cleanup = () => {
       document.body.classList.remove("print-unprinted-only");
@@ -43,10 +44,10 @@ export function PrintLabelsButton({
   return (
     <div className="print-actions">
       <button className="button button-primary" onClick={() => printLabels(unprintedCartonIds, "unprinted")} disabled={loading || !unprintedCartonIds.length}>
-        {loading ? "Naplózás..." : `Új címkék nyomtatása (${unprintedCartonIds.length})`}
+        {loading ? "Indítás..." : unprintedCartonIds.length ? `Még nem nyomtatott címkék (${unprintedCartonIds.length})` : "Nincs új címke"}
       </button>
       <button className="button" onClick={() => printLabels(cartonIds, "all")} disabled={loading || !cartonIds.length}>
-        Összes címke
+        Összes címke újranyomtatása
       </button>
       {message ? <span className={message.includes("sikertelen") ? "text-danger" : "text-success"}>{message}</span> : null}
     </div>

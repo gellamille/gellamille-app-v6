@@ -23,7 +23,7 @@ export async function POST(request: Request) {
         select c.id,
                exists (
                  select 1 from public.inventory_carton_events e
-                  where e.carton_id=c.id and e.event_type in ('label_printed','label_reprinted')
+                  where e.organization_id=c.organization_id and e.carton_id=c.id and e.event_type in ('label_printed','label_reprinted')
                ) as printed_before
           from public.inventory_cartons c
          where c.organization_id=$1 and c.lot_id=$2 and c.id = any($3::bigint[]) and c.archived_at is null
@@ -43,8 +43,8 @@ export async function POST(request: Request) {
           carton.id,
           carton.printed_before ? "label_reprinted" : "label_printed",
           user.user_id,
-          carton.printed_before ? "Karton címke újranyomtatva" : "Karton címke nyomtatva",
-          JSON.stringify({ lot_id: input.lotId })
+          carton.printed_before ? "Karton címke újranyomtatása indítva" : "Karton címke nyomtatása indítva",
+          JSON.stringify({ lot_id: input.lotId, print_requested_at: new Date().toISOString() })
         ]);
       }
 
