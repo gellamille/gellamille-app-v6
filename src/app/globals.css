@@ -58,16 +58,28 @@ button { cursor: pointer; }
   display: block;
 }
 
-.sidebar nav { display: grid; gap: 13px; }
+.sidebar nav { display: grid; gap: 13px; flex: 1; overflow-y: auto; padding-right: 2px; }
 .nav-group { display: grid; gap: 4px; }
 .nav-group-title {
-  color: #95a49b;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  padding: 7px 12px 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f3f7f4;
+  font-size: 13px;
+  font-weight: 850;
+  padding: 10px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
 }
+.nav-group-title::-webkit-details-marker { display: none; }
+.nav-group-title::after { content: "v"; margin-left: auto; color: #aebbb4; font-size: 12px; }
+.nav-group[open] .nav-group-title::after { transform: rotate(180deg); }
+.nav-group-title:hover { background: rgba(255,255,255,.08); }
+.nav-submenu { display: grid; gap: 3px; padding-left: 14px; }
+.nav-submenu a { position: relative; }
+.nav-submenu a::before { content: ""; width: 6px; height: 1px; background: #7f8f86; position: absolute; left: 1px; }
 .sidebar nav a, .nav-button {
   display: flex;
   align-items: center;
@@ -80,8 +92,9 @@ button { cursor: pointer; }
   background: transparent;
   width: 100%;
 }
+.nav-submenu a { padding-left: 16px; font-size: 13px; }
 .sidebar nav a:hover, .nav-button:hover { background: rgba(255,255,255,.08); color: #fff; }
-.sidebar-bottom { margin-top: auto; }
+.sidebar-bottom { flex-shrink: 0; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
 .nav-badge { margin-left: auto; min-width: 20px; height: 20px; border-radius: 999px; background: #d9473f; color: white; display: inline-grid; place-items: center; padding: 0 6px; font-size: 11px; font-weight: 900; }
 
 .content { min-width: 0; }

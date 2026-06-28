@@ -3,12 +3,14 @@ import Image from "next/image";
 import {
   Boxes, ClipboardList, Factory, LayoutDashboard, Truck,
   WalletCards, Users, ListTodo, FlaskConical, ChartNoAxesCombined,
-  Settings, LogOut, IceCreamBowl, AlertTriangle, ScanBarcode, ArrowRightLeft
+  Settings, LogOut, IceCreamBowl, AlertTriangle, ScanBarcode, ArrowRightLeft,
+  BriefcaseBusiness, Warehouse, Store, ShieldCheck
 } from "lucide-react";
 
 const navGroups = [
   {
     title: "Napi munka",
+    Icon: BriefcaseBusiness,
     items: [
       ["/internal", "Vezérlőpult", LayoutDashboard, ["admin","management","staff","production","warehouse","finance","sales"]],
       ["/internal/orders", "Rendelések", ClipboardList, ["admin","management","staff","sales","warehouse","finance"]],
@@ -19,6 +21,7 @@ const navGroups = [
   },
   {
     title: "Készlet és raktár",
+    Icon: Warehouse,
     items: [
       ["/internal/inventory", "Készlet", Boxes, ["admin","management","staff","production","warehouse"]],
       ["/internal/inventory/cartons", "Kartonok", Boxes, ["admin","management","staff","production","warehouse"]],
@@ -29,6 +32,7 @@ const navGroups = [
   },
   {
     title: "Gyártás",
+    Icon: Factory,
     items: [
       ["/internal/materials", "Alapanyagok", FlaskConical, ["admin","management","staff","production"]],
       ["/internal/products", "Termékek", IceCreamBowl, ["admin","management","staff","production","sales"]],
@@ -37,6 +41,7 @@ const navGroups = [
   },
   {
     title: "Üzlet",
+    Icon: Store,
     items: [
       ["/internal/partners", "Partnerek", Users, ["admin","management","sales","finance"]],
       ["/internal/finance", "Pénzügy", WalletCards, ["admin","management","finance"]],
@@ -45,6 +50,7 @@ const navGroups = [
   },
   {
     title: "Admin",
+    Icon: ShieldCheck,
     items: [
       ["/internal/settings", "Beállítások", Settings, ["admin"]]
     ]
@@ -66,12 +72,14 @@ export function InternalNav({ role, submittedOrders = 0 }: { role: string; submi
       </Link>
       <nav>
         {groups.map((group) => (
-          <div className="nav-group" key={group.title}>
-            <div className="nav-group-title">{group.title}</div>
-            {group.items.map(([href, label, Icon]) => (
-              <Link href={href} key={href}><Icon size={18} /><span>{label}</span>{href === "/internal/orders" && submittedOrders > 0 ? <span className="nav-badge">{submittedOrders}</span> : null}</Link>
-            ))}
-          </div>
+          <details className="nav-group" key={group.title} open>
+            <summary className="nav-group-title"><group.Icon size={17} /><span>{group.title}</span></summary>
+            <div className="nav-submenu">
+              {group.items.map(([href, label, Icon]) => (
+                <Link href={href} key={href}><Icon size={17} /><span>{label}</span>{href === "/internal/orders" && submittedOrders > 0 ? <span className="nav-badge">{submittedOrders}</span> : null}</Link>
+              ))}
+            </div>
+          </details>
         ))}
       </nav>
       <form action="/api/auth/signout" method="post" className="sidebar-bottom">
