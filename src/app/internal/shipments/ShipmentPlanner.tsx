@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { dateHU } from "@/lib/format";
 
@@ -24,6 +24,18 @@ type Run = {
   note: string | null;
 };
 
+type RunDelivery = {
+  id: number;
+  shipping_run_id: number;
+  sequence_no: number | null;
+  status: string;
+  planned_date: string;
+  partner_name: string;
+  order_number: string;
+  fulfillment_status: string;
+  total_cartons: number;
+};
+
 const statuses = [
   ["planned", "Tervezett"],
   ["loading", "Pakolás"],
@@ -32,11 +44,48 @@ const statuses = [
   ["cancelled", "Törölve"]
 ] as const;
 
-export function ShipmentPlanner({ candidates, runs }: { candidates: CandidateOrder[]; runs: Run[] }) {
+const fulfillmentLabels: Record<string, string> = {
+  reserved: "Foglalva",
+  partially_reserved: "Részben foglalva",
+  picking: "Összekészítés alatt",
+  packed: "Átadásra kész",
+  partially_delivered: "Részben átadva"
+};
+
+const deliveryStatusLabels: Record<string, string> = {
+  planned: "Tervezett",
+  picking: "Pakolás alatt",
+  loaded: "Felpakolva",
+  in_transit: "Úton",
+  delivered: "Átadva",
+  cancelled: "Törölve"
+};
+
+export function ShipmentPlanner({
+  candidates,
+  runs,
+  runDeliveries
+}: {
+  candidates: CandidateOrder[];
+  runs: Run[];
+  runDeliveries: RunDelivery[];
+}) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState(runs[0]?.id ?? 0);
   const today = new Date().toISOString().slice(0, 10);
+  const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
+  const deliveriesByRun = useMemo(() => {
+    const grouped = new Map<number, RunDelivery[]>();
+    for (const delivery of runDeliveries) {
+      const current = grouped.get(delivery.shipping_run_id) ?? [];
+      current.push(delivery);
+      grouped.set(delivery.shipping_run_id, current);
+    }
+    return grouped;
+  }, [runDeliveries]);
+  const selectedDeliveries = selectedRun ? deliveriesByRun.get(selectedRun.id) ?? [] : [];
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -113,7 +162,7 @@ export function ShipmentPlanner({ candidates, runs }: { candidates: CandidateOrd
                   <td className="mono">{order.order_number}</td>
                   <td>{order.partner_name}</td>
                   <td>{dateHU(order.requested_delivery_date)}</td>
-                  <td>{order.fulfillment_status}</td>
+                  <td>{fulfillmentLabels[order.fulfillment_status] ?? order.fulfillment_status}</td>
                   <td>{order.total_cartons}</td>
                   <td>{order.run_number ?? "—"}</td>
                 </tr>
@@ -128,19 +177,46 @@ export function ShipmentPlanner({ candidates, runs }: { candidates: CandidateOrd
 
       <div className="stack">
         <h2>Járatok szerkesztése</h2>
-        {runs.map((run) => (
-          <form className="card stack" key={run.id} onSubmit={(event) => update(event, run.id)}>
-            <div className="card-title-row"><h3 className="mono">{run.run_number}</h3></div>
-            <div className="form-grid">
-              <label>Dátum<input name="plannedDate" type="date" defaultValue={run.planned_date?.slice(0, 10)} required /></label>
-              <label>Állapot<select name="status" defaultValue={run.status}>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-              <label>Futár / szállító<input name="driverName" defaultValue={run.driver_name ?? ""} required /></label>
-              <label>Jármű<input name="vehicle" defaultValue={run.vehicle ?? ""} /></label>
-              <label className="full">Megjegyzés<textarea name="note" defaultValue={run.note ?? ""} /></label>
-            </div>
-            <button className="button" disabled={loading}>Járat mentése</button>
+        {runs.length ? (
+          <form className="card stack" key={selectedRun?.id ?? "no-run"} onSubmit={(event) => selectedRun ? update(event, selectedRun.id) : event.preventDefault()}>
+            <label>Szerkesztendő járat
+              <select value={selectedRun?.id ?? 0} onChange={(event) => setSelectedRunId(Number(event.target.value))}>
+                {runs.map((run) => <option key={run.id} value={run.id}>{run.run_number} · {dateHU(run.planned_date)} · {run.driver_name ?? "nincs futár"}</option>)}
+              </select>
+            </label>
+            {selectedRun ? (
+              <>
+                <div className="card-title-row"><h3 className="mono">{selectedRun.run_number}</h3><span className="text-muted">{selectedDeliveries.length} rendelés</span></div>
+                <div className="form-grid">
+                  <label>Dátum<input name="plannedDate" type="date" defaultValue={selectedRun.planned_date?.slice(0, 10)} required /></label>
+                  <label>Állapot<select name="status" defaultValue={selectedRun.status}>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                  <label>Futár / szállító<input name="driverName" defaultValue={selectedRun.driver_name ?? ""} required /></label>
+                  <label>Jármű<input name="vehicle" defaultValue={selectedRun.vehicle ?? ""} /></label>
+                  <label className="full">Megjegyzés<textarea name="note" defaultValue={selectedRun.note ?? ""} /></label>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead><tr><th>Sorrend</th><th>Rendelés</th><th>Partner</th><th>Teljesítés</th><th>Karton</th><th>Átadás</th></tr></thead>
+                    <tbody>
+                      {selectedDeliveries.map((delivery) => (
+                        <tr key={delivery.id}>
+                          <td>{delivery.sequence_no ?? "—"}</td>
+                          <td className="mono">{delivery.order_number}</td>
+                          <td>{delivery.partner_name}</td>
+                          <td>{fulfillmentLabels[delivery.fulfillment_status] ?? delivery.fulfillment_status}</td>
+                          <td>{delivery.total_cartons}</td>
+                          <td>{deliveryStatusLabels[delivery.status] ?? delivery.status}</td>
+                        </tr>
+                      ))}
+                      {!selectedDeliveries.length ? <tr><td colSpan={6}>Ezen a járaton nincs nyitott rendelés.</td></tr> : null}
+                    </tbody>
+                  </table>
+                </div>
+                <button className="button" disabled={loading}>Járat mentése</button>
+              </>
+            ) : null}
           </form>
-        ))}
+        ) : null}
         {!runs.length ? <div className="empty-state">Még nincs szerkeszthető járat.</div> : null}
       </div>
     </section>

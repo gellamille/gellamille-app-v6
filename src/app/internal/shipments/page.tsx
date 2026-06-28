@@ -5,6 +5,23 @@ import { dateHU } from "@/lib/format";
 import { requireAppUser } from "@/lib/auth";
 import { ShipmentPlanner } from "./ShipmentPlanner";
 
+const runStatusLabels: Record<string, string> = {
+  planned: "Tervezett",
+  loading: "Pakolás alatt",
+  in_transit: "Úton",
+  completed: "Kész",
+  cancelled: "Törölve"
+};
+
+const deliveryStatusLabels: Record<string, string> = {
+  planned: "Tervezett",
+  picking: "Pakolás alatt",
+  loaded: "Felpakolva",
+  in_transit: "Úton",
+  delivered: "Átadva",
+  cancelled: "Törölve"
+};
+
 export default async function ShipmentsPage() {
   const user = await requireAppUser(["admin", "management", "staff", "warehouse", "sales"]);
   const runs = await query<any>(`
@@ -30,6 +47,19 @@ export default async function ShipmentsPage() {
      order by d.planned_date, d.sequence_no
      limit 100
   `, [user.organization_id]);
+  const runDeliveries = await query<any>(`
+    select d.id,d.shipping_run_id,d.sequence_no,d.status,d.planned_date,
+           p.name as partner_name,o.order_number,o.fulfillment_status,o.total_cartons
+      from public.deliveries d
+      join public.partners p on p.id=d.partner_id
+      join public.orders o on o.id=d.order_id
+     where d.organization_id=$1
+       and d.shipping_run_id is not null
+       and d.archived_at is null
+       and d.status not in ('delivered','cancelled')
+     order by d.shipping_run_id,d.sequence_no,d.id
+     limit 300
+  `, [user.organization_id]);
   const candidates = await query<any>(`
     select o.id,o.order_number,p.name as partner_name,o.requested_delivery_date,
            o.fulfillment_status,o.total_cartons,sr.run_number
@@ -47,19 +77,19 @@ export default async function ShipmentsPage() {
   return (
     <div className="page">
       <PageHeader title="Szállítás" description="A szállítás állapota külön kezelendő a rendelés állapotától. Egy járat több partnerhez mehet." />
-      {["admin", "management", "warehouse", "sales"].includes(user.role) ? <ShipmentPlanner candidates={candidates} runs={runs} /> : null}
+      {["admin", "management", "warehouse", "sales"].includes(user.role) ? <ShipmentPlanner candidates={candidates} runs={runs} runDeliveries={runDeliveries} /> : null}
       <section className="grid grid-2">
         <div>
           <h2>Járatok</h2>
           <div className="table-wrap"><table><thead><tr><th>Járat</th><th>Dátum</th><th>Futár</th><th>Jármű</th><th>Állapot</th><th>Megálló</th></tr></thead><tbody>
-            {runs.map(r => <tr key={r.id}><td className="mono">{r.run_number}</td><td>{dateHU(r.planned_date)}</td><td>{r.driver_name ?? "—"}</td><td>{r.vehicle ?? "—"}</td><td><StatusBadge value={r.status} label={r.status} /></td><td>{r.delivery_count}</td></tr>)}
+            {runs.map(r => <tr key={r.id}><td className="mono">{r.run_number}</td><td>{dateHU(r.planned_date)}</td><td>{r.driver_name ?? "—"}</td><td>{r.vehicle ?? "—"}</td><td><StatusBadge value={r.status} label={runStatusLabels[r.status] ?? r.status} /></td><td>{r.delivery_count}</td></tr>)}
             {!runs.length ? <tr><td colSpan={6}>Még nincs járat.</td></tr> : null}
           </tbody></table></div>
         </div>
         <div>
           <h2>Átadásra váró rendelések</h2>
           <div className="table-wrap"><table><thead><tr><th>Sorrend</th><th>Járat</th><th>Rendelés</th><th>Partner</th><th>Futár</th><th>Nap</th><th>Állapot</th></tr></thead><tbody>
-            {deliveries.map(d => <tr key={d.id}><td>{d.sequence_no ?? "—"}</td><td className="mono">{d.run_number ?? "—"}</td><td className="mono">{d.order_number}</td><td>{d.partner_name}</td><td>{d.driver_name ?? "—"}</td><td>{dateHU(d.planned_date)}</td><td><StatusBadge value={d.status} label={d.status} /></td></tr>)}
+            {deliveries.map(d => <tr key={d.id}><td>{d.sequence_no ?? "—"}</td><td className="mono">{d.run_number ?? "—"}</td><td className="mono">{d.order_number}</td><td>{d.partner_name}</td><td>{d.driver_name ?? "—"}</td><td>{dateHU(d.planned_date)}</td><td><StatusBadge value={d.status} label={deliveryStatusLabels[d.status] ?? d.status} /></td></tr>)}
             {!deliveries.length ? <tr><td colSpan={7}>Nincs nyitott átadás.</td></tr> : null}
           </tbody></table></div>
         </div>

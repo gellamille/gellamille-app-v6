@@ -17,6 +17,31 @@ const statusLabels: Record<string, string> = {
   archived: "Archivált"
 };
 
+const eventLabels: Record<string, string> = {
+  created: "Létrehozva",
+  received: "Bevételezve",
+  moved: "Áthelyezve",
+  reserved: "Foglalva",
+  picked: "Összekészítve",
+  unpicked: "Összekészítés visszavonva",
+  delivered: "Átadva",
+  returned: "Visszavéve",
+  scrapped: "Selejtezve",
+  recalled: "Visszahívva",
+  archived: "Archiválva",
+  label_printed: "Címke nyomtatva",
+  label_reprinted: "Címke újranyomtatva",
+  checked: "Ellenőrizve"
+};
+
+const allocationLabels: Record<string, string> = {
+  allocated: "Foglalva",
+  picked: "Összekészítve",
+  delivered: "Átadva",
+  released: "Visszavonva",
+  cancelled: "Törölve"
+};
+
 type SearchParams = {
   status?: string;
   q?: string;
@@ -122,8 +147,8 @@ export default async function CartonsPage({ searchParams }: { searchParams: Prom
                   <td>{carton.location_name ?? "—"}<div className="text-muted mono">{carton.location_code ?? ""}</div></td>
                   <td>{carton.quantity_units} db</td>
                   <td><StatusBadge value={carton.status} label={statusLabels[carton.status] ?? carton.status} /></td>
-                  <td>{carton.order_id ? <Link className="mono" href={`/internal/orders/${carton.order_id}`}>{carton.order_number}</Link> : <span className="text-muted">—</span>}<div className="text-muted">{carton.allocation_status ?? ""}</div></td>
-                  <td>{carton.last_event_type ?? "—"}<div className="text-muted">{dateTimeHU(carton.last_event_at)}</div></td>
+                  <td>{carton.order_id ? <Link className="mono" href={`/internal/orders/${carton.order_id}`}>{carton.order_number}</Link> : <span className="text-muted">—</span>}<div className="text-muted">{allocationLabels[carton.allocation_status] ?? carton.allocation_status ?? ""}</div></td>
+                  <td>{eventLabels[carton.last_event_type] ?? carton.last_event_type ?? "—"}<div className="text-muted">{dateTimeHU(carton.last_event_at)}</div></td>
                 </tr>
               ))}
               {!cartons.length ? <tr><td colSpan={8}>Nincs a szűrésnek megfelelő karton.</td></tr> : null}
