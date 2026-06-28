@@ -13,6 +13,7 @@ export function PrintLabelsButton({
 }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const printedCartonCount = cartonIds.length - unprintedCartonIds.length;
 
   async function printLabels(ids: number[], mode: "all" | "unprinted") {
     if (!ids.length) return;
@@ -44,11 +45,13 @@ export function PrintLabelsButton({
   return (
     <div className="print-actions">
       <button className="button button-primary" onClick={() => printLabels(unprintedCartonIds, "unprinted")} disabled={loading || !unprintedCartonIds.length}>
-        {loading ? "Indítás..." : unprintedCartonIds.length ? `Még nem nyomtatott címkék (${unprintedCartonIds.length})` : "Nincs új címke"}
+        {loading ? "Indítás..." : unprintedCartonIds.length ? `Új címkék nyomtatása (${unprintedCartonIds.length})` : "Nincs új címke"}
       </button>
-      <button className="button" onClick={() => printLabels(cartonIds, "all")} disabled={loading || !cartonIds.length}>
-        Összes címke újranyomtatása
-      </button>
+      {printedCartonCount > 0 ? (
+        <button className="button" onClick={() => printLabels(cartonIds, "all")} disabled={loading || !cartonIds.length}>
+          Összes címke újranyomtatása
+        </button>
+      ) : null}
       {message ? <span className={message.includes("sikertelen") ? "text-danger" : "text-success"}>{message}</span> : null}
     </div>
   );
