@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { one, query } from "@/lib/db";
-import { dateHU, dateTimeHU, money } from "@/lib/format";
+import { dateHU, dateTimeHU, dateWithWeekdayHU, money } from "@/lib/format";
 import { INTERNAL_ROLES, requireAppUser } from "@/lib/auth";
 import { financeStatusLabels, fulfillmentLabels, orderStatusLabels } from "@/lib/status";
 import { OrderActions } from "./OrderActions";
@@ -105,7 +105,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     <div className="page">
       <PageHeader
         title={order.order_number}
-        description={`${order.partner_name} · ${dateHU(order.requested_delivery_date)}`}
+        description={`${order.partner_name} · Kért szállítás: ${dateWithWeekdayHU(order.requested_delivery_date)}`}
         actions={<><OrderActions orderId={Number(id)} status={order.status} fulfillmentStatus={order.fulfillment_status} canDeliver={canDeliver} hasMissingReservation={hasMissingReservation} />{canEditOrder ? <Link className="button" href={`/internal/orders/${id}/edit`}>Szerkesztés</Link> : null}{canEditOrder ? <DeleteOrderButton orderId={Number(id)} /> : null}<Link className="button button-danger" href={`/internal/recalls?orderId=${id}`}>Visszahívás</Link></>}
       />
       {readinessIssues.length ? (
@@ -138,6 +138,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           <h2>Rendelési adatok</h2>
           <dl className="kv">
             <dt>Partner</dt><dd>{order.partner_name}</dd>
+            <dt>Kért szállítási nap</dt><dd><strong>{dateWithWeekdayHU(order.requested_delivery_date)}</strong></dd>
             <dt>Szállítási cím</dt><dd>{order.delivery_address ?? "Nincs kiválasztva"}</dd>
             <dt>Fizetési mód</dt><dd>{order.payment_method ?? "—"}</dd>
             <dt>Fizetési határidő</dt><dd>{order.payment_terms_days ?? 0} nap</dd>

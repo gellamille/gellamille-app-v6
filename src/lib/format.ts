@@ -16,6 +16,16 @@ export function dateHU(value: string | Date | null | undefined) {
   }).format(new Date(value));
 }
 
+export function dateWithWeekdayHU(value: string | Date | null | undefined) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("hu-HU", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "long"
+  }).format(new Date(value));
+}
+
 export function dateTimeHU(value: string | Date | null | undefined) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("hu-HU", {
