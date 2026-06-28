@@ -48,9 +48,25 @@ function stockSignal(available: number, minimum: number, settings: any) {
   return "stock_low";
 }
 
-export default async function InventoryPage() {
+type SearchParams = Record<string, string | string[] | undefined>;
+
+function paramValue(params: SearchParams, key: string) {
+  const value = params[key];
+  return typeof value === "string" ? value : "";
+}
+
+function dateParam(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+}
+
+export default async function InventoryPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
   const user = await requireAppUser(["admin", "management", "staff", "production", "warehouse"]);
   const canAdjust = ["admin", "management", "warehouse"].includes(user.role);
+  const params = (await searchParams) ?? {};
+  const movementType = paramValue(params, "movementType");
+  const productId = paramValue(params, "productId");
+  const dateFrom = dateParam(paramValue(params, "dateFrom"));
+  const dateTo = dateParam(paramValue(params, "dateTo"));
 
   const settingsRows = await query<any>(`
     select low_surplus_units,medium_surplus_units,high_surplus_units,overstock_surplus_units
@@ -107,6 +123,26 @@ export default async function InventoryPage() {
      order by l.best_before,l.id
   `) : [];
   const locations = canAdjust ? await query<any>(`select id,name from public.inventory_locations where active order by name`) : [];
+  const movementValues: unknown[] = [user.organization_id];
+  const movementWhere = ["im.organization_id=$1", "im.archived_at is null"];
+
+  if (movementType && movementLabels[movementType]) {
+    movementValues.push(movementType);
+    movementWhere.push(`im.movement_type=$${movementValues.length}`);
+  }
+  if (productId && Number.isInteger(Number(productId)) && Number(productId) > 0) {
+    movementValues.push(Number(productId));
+    movementWhere.push(`im.product_id=$${movementValues.length}`);
+  }
+  if (dateFrom) {
+    movementValues.push(dateFrom);
+    movementWhere.push(`im.created_at >= $${movementValues.length}::date`);
+  }
+  if (dateTo) {
+    movementValues.push(dateTo);
+    movementWhere.push(`im.created_at < ($${movementValues.length}::date + interval '1 day')`);
+  }
+
   const recentMovements = await query<any>(`
     select im.id,im.movement_type,im.quantity_units,im.reason,im.created_at,
            l.lot_number,p.name as product_name,p.code as product_code,
@@ -117,10 +153,10 @@ export default async function InventoryPage() {
       join public.products p on p.id=im.product_id
       left join public.inventory_locations loc on loc.id=im.location_id
       left join public.app_users au on au.user_id=im.created_by
-     where im.organization_id=$1 and im.archived_at is null
+     where ${movementWhere.join(" and ")}
      order by im.created_at desc,im.id desc
-     limit 30
-  `, [user.organization_id]);
+     limit 100
+  `, movementValues);
 
   return (
     <div className="page">
@@ -141,6 +177,20 @@ export default async function InventoryPage() {
 
       <section className="section-gap">
         <h2>Legutóbbi készletmozgások</h2>
+        <form className="filter-bar section-gap-small" action="/internal/inventory">
+          <label>Típus<select name="movementType" defaultValue={movementType}>
+            <option value="">Minden</option>
+            {Object.entries(movementLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select></label>
+          <label>Termék<select name="productId" defaultValue={productId}>
+            <option value="">Minden</option>
+            {products.map((product) => <option key={product.product_id} value={product.product_id}>{product.product_name} · {product.size_ml} ml</option>)}
+          </select></label>
+          <label>Dátumtól<input name="dateFrom" type="date" defaultValue={dateFrom} /></label>
+          <label>Dátumig<input name="dateTo" type="date" defaultValue={dateTo} /></label>
+          <button className="button button-primary filter-actions">Szűrés</button>
+          <Link className="button filter-actions" href="/internal/inventory">Alaphelyzet</Link>
+        </form>
         <div className="table-wrap">
           <table>
             <thead><tr><th>Időpont</th><th>LOT</th><th>Termék</th><th>Hely</th><th>Típus</th><th>Darab</th><th>Indok</th><th>Rögzítette</th></tr></thead>
@@ -158,6 +208,7 @@ export default async function InventoryPage() {
             ))}</tbody>
           </table>
         </div>
+        {!recentMovements.length ? <div className="empty-state section-gap-small">Nincs a szűrésnek megfelelő készletmozgás.</div> : null}
       </section>
 
       <section>
