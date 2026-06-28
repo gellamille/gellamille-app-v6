@@ -74,12 +74,12 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
 
   return (
     <div className="page labels-page">
+      <Link href="/internal/production" className="back-link">← Vissza</Link>
       <PageHeader
         title="Karton címkék"
         description={`${lot.lot_number} · ${lot.product_name} · ${cartons.length} karton`}
         actions={
           <>
-            <Link href="/internal/production" className="button">Vissza a LOT listához</Link>
             <GenerateCartonsButton lotId={lot.id} remainingUnits={remainingUnits} unitsPerCarton={lot.units_per_carton} />
             <PrintLabelsButton
               lotId={lot.id}
