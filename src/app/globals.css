@@ -58,7 +58,16 @@ button { cursor: pointer; }
   display: block;
 }
 
-.sidebar nav { display: grid; gap: 4px; }
+.sidebar nav { display: grid; gap: 13px; }
+.nav-group { display: grid; gap: 4px; }
+.nav-group-title {
+  color: #95a49b;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 7px 12px 2px;
+}
 .sidebar nav a, .nav-button {
   display: flex;
   align-items: center;
@@ -389,6 +398,7 @@ textarea { min-height: 95px; resize: vertical; }
   .sidebar { position: static; height: auto; min-height: 0; }
   .internal-logo-image { width: 150px; }
   .sidebar nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nav-group { align-content: start; }
   .sidebar-bottom { margin-top: 16px; }
   .topbar { position: static; padding: 0 18px; }
   .page { padding: 24px 18px 50px; }

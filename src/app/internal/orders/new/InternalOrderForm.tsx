@@ -3,6 +3,11 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+function cartonCount(units: number, unitsPerCarton: number) {
+  if (!unitsPerCarton) return 0;
+  return Math.floor(Number(units || 0) / Number(unitsPerCarton));
+}
+
 export function InternalOrderForm({ partners, products }: { partners: any[]; products: any[] }) {
   const router = useRouter();
   const [partnerId, setPartnerId] = useState("");
@@ -38,8 +43,23 @@ export function InternalOrderForm({ partners, products }: { partners: any[]; pro
       </div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Termék</th><th>Kiszerelés</th><th>Karton tartalma</th><th>Karton</th></tr></thead>
-          <tbody>{products.map(p => <tr key={p.id}><td>{p.name}</td><td>{p.size_ml} ml</td><td>{p.units_per_carton} db</td><td><input type="number" min="0" value={items[p.id] ?? 0} onChange={(e) => setItems({...items, [p.id]: Number(e.target.value)})} /></td></tr>)}</tbody>
+          <thead><tr><th>Termék</th><th>Kiszerelés</th><th>Karton tartalma</th><th>Szabad készlet</th><th>Foglalt</th><th>Rendelés után</th><th>Karton</th></tr></thead>
+          <tbody>{products.map(p => {
+            const orderedCartons = Number(items[p.id] ?? 0);
+            const orderedUnits = orderedCartons * Number(p.units_per_carton ?? 0);
+            const remainingUnits = Number(p.available_units ?? 0) - orderedUnits;
+            return (
+              <tr key={p.id}>
+                <td>{p.name}<div className="mono text-muted">{p.code}</div></td>
+                <td>{p.size_ml} ml</td>
+                <td>{p.units_per_carton} db</td>
+                <td><strong>{p.available_units} db</strong><div className="text-muted">{cartonCount(p.available_units, p.units_per_carton)} karton</div></td>
+                <td>{p.reserved_units} db</td>
+                <td className={remainingUnits < 0 ? "text-danger" : ""}>{remainingUnits} db<div className="text-muted">{cartonCount(Math.max(0, remainingUnits), p.units_per_carton)} karton</div></td>
+                <td><input type="number" min="0" value={items[p.id] ?? 0} onChange={(e) => setItems({...items, [p.id]: Number(e.target.value)})} /></td>
+              </tr>
+            );
+          })}</tbody>
         </table>
       </div>
       {error ? <div className="alert alert-danger">{error}</div> : null}
