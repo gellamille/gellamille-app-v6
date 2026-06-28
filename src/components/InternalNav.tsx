@@ -11,6 +11,7 @@ const nav = [
   ["/internal/orders", "Rendelések", ClipboardList, ["admin","management","staff","sales","warehouse","finance"]],
   ["/internal/production", "Gyártás és LOT", Factory, ["admin","management","staff","production"]],
   ["/internal/inventory", "Készlet", Boxes, ["admin","management","staff","production","warehouse"]],
+  ["/internal/inventory/cartons", "Kartonok", Boxes, ["admin","management","staff","production","warehouse"]],
   ["/internal/inventory/cartons/scanner-test", "Scanner teszt", ScanBarcode, ["admin","management","staff","production","warehouse"]],
   ["/internal/inventory/cartons/check", "Karton ellenőrzés", ScanBarcode, ["admin","management","staff","production","warehouse"]],
   ["/internal/inventory/cartons/move", "Karton áthelyezés", ArrowRightLeft, ["admin","management","production","warehouse"]],

@@ -90,6 +90,7 @@ export default async function InventoryPage() {
         description="Termékszintű és LOT-szintű szabad készlet. A kézi korrekció indoklással, auditálható készletmozgásként történik."
         actions={
           <>
+            <Link href="/internal/inventory/cartons" className="button">Karton dashboard</Link>
             <Link href="/internal/inventory/cartons/scanner-test" className="button">Scanner teszt</Link>
             <Link href="/internal/inventory/cartons/check" className="button button-secondary">Karton ellenőrzés</Link>
             <Link href="/internal/inventory/cartons/move" className="button button-primary">Karton áthelyezés</Link>
