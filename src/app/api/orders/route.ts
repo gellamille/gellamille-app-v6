@@ -87,7 +87,10 @@ export async function POST(request: Request) {
          where partner_id=$1 and active=true
       `, [partnerId, input.requestedDeliveryDate]);
       const deliveryPolicy = deliveryDayResult.rows[0];
-      if (Number(deliveryPolicy?.configured_count ?? 0) > 0 && !deliveryPolicy?.selected_allowed) {
+      if (Number(deliveryPolicy?.configured_count ?? 0) < 1) {
+        throw new Error("Ehhez a partnerhez nincs aktív szállítási nap beállítva.");
+      }
+      if (!deliveryPolicy?.selected_allowed) {
         throw new Error("A kiválasztott dátum nem engedélyezett szállítási nap ennél a partnernél.");
       }
       const todayIso = new Date().toISOString().slice(0, 10);

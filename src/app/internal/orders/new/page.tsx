@@ -6,7 +6,20 @@ import { InternalOrderForm } from "./InternalOrderForm";
 export default async function NewInternalOrderPage() {
   await requireAppUser(["admin", "management", "sales"]);
 
-  const partners = await query<any>(`select id, name from public.partners where coalesce(active,true) = true order by name`);
+  const partners = await query<any>(`
+    select p.id, p.name,
+           coalesce((
+             select jsonb_agg(jsonb_build_object(
+               'weekday', d.weekday,
+               'cutoff_business_days', d.cutoff_business_days
+             ) order by d.weekday)
+               from public.partner_delivery_days d
+              where d.partner_id=p.id and d.active=true
+           ), '[]'::jsonb) as delivery_days
+      from public.partners p
+     where coalesce(p.active,true) = true
+     order by p.name
+  `);
   const products = await query<any>(`
     select p.id, p.code, p.name, p.size_ml, p.units_per_carton, p.net_unit_price_huf, p.vat_rate_bps,
            coalesce(s.physical_units,0)::int as physical_units,
