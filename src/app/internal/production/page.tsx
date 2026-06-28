@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { query } from "@/lib/db";
 import { dateHU } from "@/lib/format";
 import { requireAppUser } from "@/lib/auth";
+import { huLabel, lotStatusLabels } from "@/lib/status";
 
 export default async function ProductionPage() {
   await requireAppUser(["admin", "management", "staff", "production"]);
@@ -48,7 +49,7 @@ export default async function ProductionPage() {
                 <td>{l.physical_units} db</td>
                 <td>{l.allocated_units} db</td>
                 <td><strong>{l.available_units} db</strong></td>
-                <td><StatusBadge value={l.status} label={l.status === "active" ? "Aktív" : l.status === "void" ? "Sztornózott" : l.status} /></td>
+                <td><StatusBadge value={l.status} label={huLabel(lotStatusLabels, l.status)} /></td>
                 <td><Link className="button button-small" href={`/internal/inventory/cartons/labels/${l.id}`}>{l.carton_count > 0 ? "Címkék" : "Kartonozás"}</Link></td>
               </tr>
             ))}

@@ -3,6 +3,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { requireAppUser } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { money } from "@/lib/format";
+import { huLabel, recipeStatusLabels } from "@/lib/status";
 import { MaterialRecipeManager } from "./MaterialRecipeManager";
 
 const categoryLabels: Record<string, string> = {
@@ -73,7 +74,7 @@ export default async function MaterialsPage() {
         <div>
           <h2>Receptverziók</h2>
           <div className="table-wrap"><table><thead><tr><th>Termék</th><th>Verzió</th><th>Összetevők</th><th>Tápérték / 100 g</th><th>Érvényes</th><th>Állapot</th></tr></thead><tbody>
-            {recipes.map(r => <tr key={r.id}><td>{r.product_name} · {r.size_ml} ml</td><td>v{r.version_no}</td><td>{r.components ?? `${r.component_count} összetevő`}</td><td>{r.nutrition_calories_kcal_per_100g} kcal · Zsír {r.nutrition_fat_g_per_100g} g · CH {r.nutrition_carbohydrate_g_per_100g} g · Fehérje {r.nutrition_protein_g_per_100g} g</td><td>{r.effective_from ?? "—"}</td><td><StatusBadge value={r.status} label={r.status} /></td></tr>)}
+            {recipes.map(r => <tr key={r.id}><td>{r.product_name} · {r.size_ml} ml</td><td>v{r.version_no}</td><td>{r.components ?? `${r.component_count} összetevő`}</td><td>{r.nutrition_calories_kcal_per_100g} kcal · Zsír {r.nutrition_fat_g_per_100g} g · CH {r.nutrition_carbohydrate_g_per_100g} g · Fehérje {r.nutrition_protein_g_per_100g} g</td><td>{r.effective_from ?? "—"}</td><td><StatusBadge value={r.status} label={huLabel(recipeStatusLabels, r.status)} /></td></tr>)}
             {!recipes.length ? <tr><td colSpan={6}>Még nincs rögzített recept.</td></tr> : null}
           </tbody></table></div>
         </div>

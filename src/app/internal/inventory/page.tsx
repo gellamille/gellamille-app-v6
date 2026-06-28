@@ -3,18 +3,10 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { query } from "@/lib/db";
 import { dateHU, dateTimeHU } from "@/lib/format";
 import { requireAppUser } from "@/lib/auth";
+import { huLabel, inventoryMovementLabels, lotStatusLabels } from "@/lib/status";
 import { InventoryAdjustmentForm } from "./InventoryAdjustmentForm";
 import { InventorySettingsForm } from "./InventorySettingsForm";
 import Link from "next/link";
-
-const lotStatusLabels: Record<string, string> = {
-  active: "Aktív",
-  depleted: "Elfogyott",
-  recalled: "Visszahívott / selejt",
-  scrapped: "Selejt",
-  expired: "Lejárt",
-  void: "Sztornózott",
-};
 
 const stockSignalLabels: Record<string, string> = {
   stock_critical: "Kritikus",
@@ -22,21 +14,6 @@ const stockSignalLabels: Record<string, string> = {
   stock_medium: "Közepes",
   stock_high: "Magas",
   stock_overstock: "Túlteljesített",
-};
-
-const movementLabels: Record<string, string> = {
-  correction: "Korrekció",
-  sample: "Partneri minta",
-  marketing: "Marketing / fotózás",
-  tasting: "Kóstoltatás",
-  internal_use: "Belső felhasználás",
-  damage: "Sérülés",
-  scrap: "Selejt",
-  production: "Gyártás",
-  sale: "Értékesítés",
-  transfer_out: "Áthelyezés ki",
-  transfer_in: "Áthelyezés be",
-  recall: "Visszahívás"
 };
 
 function stockSignal(available: number, minimum: number, settings: any) {
@@ -130,7 +107,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: P
   const movementValues: unknown[] = [user.organization_id];
   const movementWhere = ["im.organization_id=$1", "im.archived_at is null"];
 
-  if (movementType && movementLabels[movementType]) {
+  if (movementType && inventoryMovementLabels[movementType]) {
     movementValues.push(movementType);
     movementWhere.push(`im.movement_type=$${movementValues.length}`);
   }
@@ -184,7 +161,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: P
         <form className="filter-bar section-gap-small" action="/internal/inventory">
           <label>Típus<select name="movementType" defaultValue={movementType}>
             <option value="">Minden</option>
-            {Object.entries(movementLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            {Object.entries(inventoryMovementLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
           <label>Termék<select name="productId" defaultValue={productId}>
             <option value="">Minden</option>
@@ -204,7 +181,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: P
                 <td className="mono">{movement.lot_number}</td>
                 <td>{movement.product_name}<div className="mono text-muted">{movement.product_code}</div></td>
                 <td>{movement.location_name ?? "—"}</td>
-                <td>{movementLabels[movement.movement_type] ?? movement.movement_type}</td>
+                <td>{huLabel(inventoryMovementLabels, movement.movement_type)}</td>
                 <td className={Number(movement.quantity_units) < 0 ? "text-danger" : "text-success"}>{Number(movement.quantity_units) > 0 ? "+" : ""}{movement.quantity_units} db</td>
                 <td>{movement.reason ?? "—"}</td>
                 <td>{movement.created_by_name ?? "Rendszer"}</td>
@@ -256,7 +233,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: P
                 <td>{l.physical_units} db</td>
                 <td>{l.allocated_units} db</td>
                 <td><strong>{l.available_units} db</strong></td>
-                <td><StatusBadge value={l.status} label={lotStatusLabels[l.status] ?? l.status} /></td>
+                <td><StatusBadge value={l.status} label={huLabel(lotStatusLabels, l.status)} /></td>
               </tr>
             ))}</tbody>
           </table>

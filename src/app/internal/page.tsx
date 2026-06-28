@@ -4,7 +4,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { query, one } from "@/lib/db";
 import { money, dateHU } from "@/lib/format";
 import { INTERNAL_ROLES, requireAppUser } from "@/lib/auth";
-import { financeStatusLabels, fulfillmentLabels, orderStatusLabels } from "@/lib/status";
+import { financeStatusLabels, fulfillmentLabels, huLabel, orderStatusLabels } from "@/lib/status";
 
 type Metrics = {
   submitted_orders: number;
@@ -88,9 +88,9 @@ export default async function DashboardPage() {
                     <td><Link href={`/internal/orders/${order.id}`} className="mono">{order.order_number}</Link></td>
                     <td>{order.partner_name}</td>
                     <td>{dateHU(order.requested_delivery_date)}</td>
-                    <td><StatusBadge value={order.status} label={orderStatusLabels[order.status] ?? order.status} /></td>
-                    <td><StatusBadge value={order.fulfillment_status} label={fulfillmentLabels[order.fulfillment_status] ?? order.fulfillment_status} /></td>
-                    <td><StatusBadge value={order.finance_status} label={financeStatusLabels[order.finance_status] ?? order.finance_status} /></td>
+                    <td><StatusBadge value={order.status} label={huLabel(orderStatusLabels, order.status)} /></td>
+                    <td><StatusBadge value={order.fulfillment_status} label={huLabel(fulfillmentLabels, order.fulfillment_status)} /></td>
+                    <td><StatusBadge value={order.finance_status} label={huLabel(financeStatusLabels, order.finance_status)} /></td>
                     <td>{money(order.gross_total_huf)}</td>
                   </tr>
                 )) : <tr><td colSpan={7}>Nincs nyitott MVP rendelési művelet.</td></tr>}

@@ -4,7 +4,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { query } from "@/lib/db";
 import { money, dateHU } from "@/lib/format";
 import { INTERNAL_ROLES, requireAppUser } from "@/lib/auth";
-import { financeStatusLabels, fulfillmentLabels, orderStatusLabels } from "@/lib/status";
+import { financeStatusLabels, fulfillmentLabels, huLabel, orderStatusLabels } from "@/lib/status";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -68,9 +68,9 @@ export default async function OrdersPage({ searchParams }: { searchParams?: Prom
                 <td><Link href={`/internal/orders/${o.id}`} className="mono">{o.order_number}</Link></td>
                 <td>{o.partner_name}</td>
                 <td>{dateHU(o.requested_delivery_date)}</td>
-                <td><StatusBadge value={o.status} label={orderStatusLabels[o.status] ?? o.status} /></td>
-                <td><StatusBadge value={o.fulfillment_status} label={fulfillmentLabels[o.fulfillment_status] ?? o.fulfillment_status} /></td>
-                <td><StatusBadge value={o.finance_status} label={financeStatusLabels[o.finance_status] ?? o.finance_status} /></td>
+                <td><StatusBadge value={o.status} label={huLabel(orderStatusLabels, o.status)} /></td>
+                <td><StatusBadge value={o.fulfillment_status} label={huLabel(fulfillmentLabels, o.fulfillment_status)} /></td>
+                <td><StatusBadge value={o.finance_status} label={huLabel(financeStatusLabels, o.finance_status)} /></td>
                 <td>{o.total_cartons}</td>
                 <td>{money(o.gross_total_huf)}</td>
               </tr>

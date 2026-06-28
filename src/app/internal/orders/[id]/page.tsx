@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { one, query } from "@/lib/db";
 import { dateHU, dateTimeHU, dateWithWeekdayHU, money } from "@/lib/format";
 import { INTERNAL_ROLES, requireAppUser } from "@/lib/auth";
-import { financeStatusLabels, fulfillmentLabels, orderStatusLabels } from "@/lib/status";
+import { allocationStatusLabels, financeStatusLabels, fulfillmentLabels, huLabel, orderStatusLabels, paymentMethodLabels } from "@/lib/status";
 import { OrderActions } from "./OrderActions";
 import { OrderCartonPicker } from "./OrderCartonPicker";
 import { UnpickCartonButton } from "./UnpickCartonButton";
@@ -123,15 +123,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <section className="grid grid-3">
         <div className="card">
           <h3>Rendelési állapot</h3>
-          <StatusBadge value={order.status} label={orderStatusLabels[order.status] ?? order.status} />
+          <StatusBadge value={order.status} label={huLabel(orderStatusLabels, order.status)} />
         </div>
         <div className="card">
           <h3>Teljesítés</h3>
-          <StatusBadge value={order.fulfillment_status} label={fulfillmentLabels[order.fulfillment_status] ?? order.fulfillment_status} />
+          <StatusBadge value={order.fulfillment_status} label={huLabel(fulfillmentLabels, order.fulfillment_status)} />
         </div>
         <div className="card">
           <h3>Pénzügy</h3>
-          <StatusBadge value={order.finance_status} label={financeStatusLabels[order.finance_status] ?? order.finance_status} />
+          <StatusBadge value={order.finance_status} label={huLabel(financeStatusLabels, order.finance_status)} />
         </div>
       </section>
 
@@ -142,7 +142,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             <dt>Partner</dt><dd>{order.partner_name}</dd>
             <dt>Kért szállítási nap</dt><dd><strong>{dateWithWeekdayHU(order.requested_delivery_date)}</strong></dd>
             <dt>Szállítási cím</dt><dd>{order.delivery_address ?? "Nincs kiválasztva"}</dd>
-            <dt>Fizetési mód</dt><dd>{order.payment_method ?? "—"}</dd>
+            <dt>Fizetési mód</dt><dd>{huLabel(paymentMethodLabels, order.payment_method)}</dd>
             <dt>Fizetési határidő</dt><dd>{order.payment_terms_days ?? 0} nap</dd>
             <dt>Megjegyzés</dt><dd>{order.note ?? "—"}</dd>
             <dt>Beküldve</dt><dd>{dateTimeHU(order.submitted_at)}</dd>
@@ -200,7 +200,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     <td className="mono">{allocation.carton_code ?? "—"}</td>
                     <td>{dateHU(allocation.best_before)}</td>
                     <td>{allocation.quantity_units} db</td>
-                    <td><StatusBadge value={allocation.status} label={allocation.status} /></td>
+                    <td><StatusBadge value={allocation.status} label={huLabel(allocationStatusLabels, allocation.status)} /></td>
                     <td>{dateTimeHU(allocation.delivered_at)}</td>
                     <td>
                       {allocation.carton_id && ["allocated", "picked"].includes(allocation.status) ? (
@@ -246,7 +246,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           {receivables.length ? receivables.map((r) => (
             <div className="list-item" key={r.id}>
               <div><strong>{r.receivable_number}</strong><div className="text-muted">Esedékes: {dateHU(r.due_date)}</div></div>
-              <div className="right"><strong>{money(r.outstanding_huf)}</strong><div><StatusBadge value={r.status} label={financeStatusLabels[r.status] ?? r.status} /></div></div>
+              <div className="right"><strong>{money(r.outstanding_huf)}</strong><div><StatusBadge value={r.status} label={huLabel(financeStatusLabels, r.status)} /></div></div>
             </div>
           )) : <div className="empty-state">Követelés az átadás rögzítésekor keletkezik automatikusan.</div>}
         </div>

@@ -3,6 +3,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { query } from "@/lib/db";
 import { dateTimeHU, dateHU } from "@/lib/format";
 import { requireAppUser } from "@/lib/auth";
+import { huLabel, lotStatusLabels, recallStatusLabels } from "@/lib/status";
 import { RecallForm } from "./RecallForm";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -62,14 +63,14 @@ export default async function RecallsPage({ searchParams }: { searchParams?: Pro
         <div>
           <h2>Visszahívások</h2>
           <div className="table-wrap"><table><thead><tr><th>Cím</th><th>Nyitva</th><th>LOT</th><th>Állapot</th><th>Indok</th></tr></thead><tbody>
-            {recalls.map((recall) => <tr key={recall.id}><td>{recall.title}</td><td>{dateTimeHU(recall.opened_at)}</td><td>{recall.lot_count}</td><td><StatusBadge value={recall.status} label={recall.status} /></td><td>{recall.reason}</td></tr>)}
+            {recalls.map((recall) => <tr key={recall.id}><td>{recall.title}</td><td>{dateTimeHU(recall.opened_at)}</td><td>{recall.lot_count}</td><td><StatusBadge value={recall.status} label={huLabel(recallStatusLabels, recall.status)} /></td><td>{recall.reason}</td></tr>)}
             {!recalls.length ? <tr><td colSpan={5}>Még nincs visszahívás.</td></tr> : null}
           </tbody></table></div>
         </div>
         <div>
           <h2>Érintett LOT-ok</h2>
           <div className="table-wrap"><table><thead><tr><th>LOT</th><th>Termék</th><th>Visszahívva</th><th>Állapot</th></tr></thead><tbody>
-            {recallLots.map((lot) => <tr key={`${lot.recall_id}-${lot.lot_number}`}><td className="mono">{lot.lot_number}</td><td>{lot.product_name}</td><td>{dateHU(lot.recalled_at)}</td><td><StatusBadge value={lot.status} label={lot.status} /></td></tr>)}
+            {recallLots.map((lot) => <tr key={`${lot.recall_id}-${lot.lot_number}`}><td className="mono">{lot.lot_number}</td><td>{lot.product_name}</td><td>{dateHU(lot.recalled_at)}</td><td><StatusBadge value={lot.status} label={huLabel(lotStatusLabels, lot.status)} /></td></tr>)}
             {!recallLots.length ? <tr><td colSpan={4}>Még nincs visszahívott LOT.</td></tr> : null}
           </tbody></table></div>
         </div>

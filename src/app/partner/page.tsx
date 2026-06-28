@@ -4,7 +4,7 @@ import { requireAppUser } from "@/lib/auth";
 import { one, query } from "@/lib/db";
 import { dateHU, money } from "@/lib/format";
 import { StatusBadge } from "@/components/StatusBadge";
-import { orderStatusLabels } from "@/lib/status";
+import { huLabel, orderStatusLabels, paymentMethodLabels } from "@/lib/status";
 import { Catalog } from "./catalog/Catalog";
 
 export default async function PartnerDashboardPage() {
@@ -59,7 +59,7 @@ export default async function PartnerDashboardPage() {
           <dt>Kapcsolat</dt><dd>{partner?.email ?? "—"} {partner?.phone ? `· ${partner.phone}` : ""}</dd>
           <dt>Szállítási cím</dt><dd>{partner?.shipping_address ?? "—"}</dd>
           <dt>Szállítási nap</dt><dd>{partner?.delivery_days ?? "—"}</dd>
-          <dt>Fizetési mód</dt><dd>{partner?.default_payment_method ?? "—"}</dd>
+          <dt>Fizetési mód</dt><dd>{huLabel(paymentMethodLabels, partner?.default_payment_method)}</dd>
         </dl>
       </section>
       <section className="section-gap">
@@ -69,7 +69,7 @@ export default async function PartnerDashboardPage() {
       <section className="section-gap">
         <div className="card-title-row"><h2>Legutóbbi rendelések</h2><Link href="/partner/orders" className="button button-small">Összes</Link></div>
         <div className="table-wrap"><table><thead><tr><th>Rendelés</th><th>Szállítás</th><th>Állapot</th><th>Bruttó</th></tr></thead><tbody>
-          {orders.map(o => <tr key={o.id}><td className="mono">{o.order_number}</td><td>{dateHU(o.requested_delivery_date)}</td><td><StatusBadge value={o.status} label={orderStatusLabels[o.status] ?? o.status} /></td><td>{money(o.gross_total_huf)}</td></tr>)}
+          {orders.map(o => <tr key={o.id}><td className="mono">{o.order_number}</td><td>{dateHU(o.requested_delivery_date)}</td><td><StatusBadge value={o.status} label={huLabel(orderStatusLabels, o.status)} /></td><td>{money(o.gross_total_huf)}</td></tr>)}
           {!orders.length ? <tr><td colSpan={4}>Még nincs rendelés.</td></tr> : null}
         </tbody></table></div>
       </section>

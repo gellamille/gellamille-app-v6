@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { query, one } from "@/lib/db";
 import { dateHU, money } from "@/lib/format";
-import { financeStatusLabels } from "@/lib/status";
+import { expenseStatusLabels, financeStatusLabels, huLabel } from "@/lib/status";
 import { FinanceEntryForms } from "./FinanceEntryForms";
 
 export default async function FinancePage() {
@@ -54,7 +54,7 @@ export default async function FinancePage() {
       <section className="section-gap">
         <h2>Nyitott követelések</h2>
         <div className="table-wrap"><table><thead><tr><th>Azonosító</th><th>Partner</th><th>Rendelés</th><th>Átadás</th><th>Esedékes</th><th>Bruttó</th><th>Fizetve</th><th>Hátralék</th><th>Állapot</th></tr></thead><tbody>
-          {receivables.map(r => <tr key={r.id}><td className="mono">{r.receivable_number}</td><td>{r.partner_name}</td><td className="mono">{r.order_number}</td><td>{dateHU(r.delivered_at)}</td><td>{dateHU(r.due_date)}</td><td>{money(r.gross_amount_huf)}</td><td>{money(r.paid_huf)}</td><td><strong>{money(r.outstanding_huf)}</strong></td><td><StatusBadge value={r.status} label={financeStatusLabels[r.status] ?? r.status} /></td></tr>)}
+          {receivables.map(r => <tr key={r.id}><td className="mono">{r.receivable_number}</td><td>{r.partner_name}</td><td className="mono">{r.order_number}</td><td>{dateHU(r.delivered_at)}</td><td>{dateHU(r.due_date)}</td><td>{money(r.gross_amount_huf)}</td><td>{money(r.paid_huf)}</td><td><strong>{money(r.outstanding_huf)}</strong></td><td><StatusBadge value={r.status} label={huLabel(financeStatusLabels, r.status)} /></td></tr>)}
           {!receivables.length ? <tr><td colSpan={9}>Nincs követelés.</td></tr> : null}
         </tbody></table></div>
       </section>
@@ -62,7 +62,7 @@ export default async function FinancePage() {
         <div>
           <h2>Kiadások</h2>
           <div className="table-wrap"><table><thead><tr><th>Teljesítés</th><th>Kifizetés</th><th>Kategória</th><th>Leírás</th><th>Bruttó</th><th>Állapot</th></tr></thead><tbody>
-            {expenses.map(e => <tr key={e.id}><td>{dateHU(e.performance_date)}</td><td>{dateHU(e.payment_date)}</td><td>{e.category_name ?? "Egyéb"}</td><td>{e.description}</td><td className="text-danger">{money(e.gross_amount_huf)}</td><td><StatusBadge value={e.status} label={e.status} /></td></tr>)}
+            {expenses.map(e => <tr key={e.id}><td>{dateHU(e.performance_date)}</td><td>{dateHU(e.payment_date)}</td><td>{e.category_name ?? "Egyéb"}</td><td>{e.description}</td><td className="text-danger">{money(e.gross_amount_huf)}</td><td><StatusBadge value={e.status} label={huLabel(expenseStatusLabels, e.status)} /></td></tr>)}
             {!expenses.length ? <tr><td colSpan={6}>Még nincs rögzített kiadás.</td></tr> : null}
           </tbody></table></div>
         </div>
