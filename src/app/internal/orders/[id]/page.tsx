@@ -9,6 +9,7 @@ import { financeStatusLabels, fulfillmentLabels, orderStatusLabels } from "@/lib
 import { OrderActions } from "./OrderActions";
 import { OrderCartonPicker } from "./OrderCartonPicker";
 import { UnpickCartonButton } from "./UnpickCartonButton";
+import { DeleteOrderButton } from "./DeleteOrderButton";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireAppUser(INTERNAL_ROLES);
@@ -39,7 +40,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
            ),0)::int as picked_quantity
       from public.order_items oi
       join public.products p on p.id = oi.product_id
-     where oi.order_id = $1
+     where oi.order_id = $1 and oi.unit_quantity > 0
      order by oi.id
   `, [id]);
 
@@ -98,13 +99,14 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const hasMissingReservation = activeItems.some((item) => item.missingReservation > 0);
   const canDeliver = activeItems.length > 0 && readinessIssues.length === 0;
   const canScanPick = ["approved", "partially_approved"].includes(order.status) && !["delivered", "cancelled"].includes(order.fulfillment_status);
+  const canEditOrder = !["closed", "cancelled", "void"].includes(order.status) && !["delivered", "cancelled"].includes(order.fulfillment_status) && !["receivable", "paid", "partially_paid", "overdue", "void"].includes(order.finance_status);
 
   return (
     <div className="page">
       <PageHeader
         title={order.order_number}
         description={`${order.partner_name} · ${dateHU(order.requested_delivery_date)}`}
-        actions={<><OrderActions orderId={Number(id)} status={order.status} fulfillmentStatus={order.fulfillment_status} canDeliver={canDeliver} hasMissingReservation={hasMissingReservation} /><Link className="button button-danger" href={`/internal/recalls?orderId=${id}`}>Visszahívás</Link></>}
+        actions={<><OrderActions orderId={Number(id)} status={order.status} fulfillmentStatus={order.fulfillment_status} canDeliver={canDeliver} hasMissingReservation={hasMissingReservation} />{canEditOrder ? <Link className="button" href={`/internal/orders/${id}/edit`}>Szerkesztés</Link> : null}{canEditOrder ? <DeleteOrderButton orderId={Number(id)} /> : null}<Link className="button button-danger" href={`/internal/recalls?orderId=${id}`}>Visszahívás</Link></>}
       />
       {readinessIssues.length ? (
         <section className="alert alert-warning section-gap">
