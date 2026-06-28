@@ -31,15 +31,6 @@ const navGroups = [
     ]
   },
   {
-    title: "Gyártás",
-    Icon: Factory,
-    items: [
-      ["/internal/materials", "Alapanyagok", FlaskConical, ["admin","management","staff","production"]],
-      ["/internal/products", "Termékek", IceCreamBowl, ["admin","management","staff","production","sales"]],
-      ["/internal/recalls", "Visszahívás", AlertTriangle, ["admin","management","staff","production","warehouse","sales"]]
-    ]
-  },
-  {
     title: "Üzlet",
     Icon: Store,
     items: [
@@ -52,6 +43,9 @@ const navGroups = [
     title: "Admin",
     Icon: ShieldCheck,
     items: [
+      ["/internal/materials", "Alapanyagok", FlaskConical, ["admin","management","staff","production"]],
+      ["/internal/products", "Termékek", IceCreamBowl, ["admin","management","staff","production","sales"]],
+      ["/internal/recalls", "Visszahívás", AlertTriangle, ["admin","management","staff","production","warehouse","sales"]],
       ["/internal/settings", "Beállítások", Settings, ["admin"]]
     ]
   }
