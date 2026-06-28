@@ -390,8 +390,8 @@ textarea { min-height: 95px; resize: vertical; }
 .checkbox-line input { width: auto; margin-top: 2px; }
 .details-summary { cursor: pointer; font-weight: 850; }
 .notification-menu { position: relative; }
-.notification-menu summary { list-style: none; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 800; }
-.notification-menu summary::-webkit-details-marker { display: none; }
+.notification-trigger { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 800; border: 0; background: transparent; color: var(--ink); padding: 0; }
+.notification-trigger:hover { color: var(--brand-dark); }
 .notification-panel { position: absolute; right: 0; top: calc(100% + 12px); width: min(420px, 88vw); max-height: 520px; overflow: auto; background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 20px 60px rgba(31,42,37,.18); padding: 12px; z-index: 50; }
 .notification-item { width: 100%; padding: 10px 8px; border: 0; border-bottom: 1px solid #edf0ed; background: transparent; color: var(--ink); text-align: left; display: grid; gap: 4px; cursor: pointer; border-radius: 8px; }
 .notification-item:hover { background: #f4f6f2; }
