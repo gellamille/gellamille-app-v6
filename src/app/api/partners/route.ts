@@ -27,17 +27,17 @@ const schema = z.object({
 });
 
 const updateSchema = schema.extend({
-  id: z.number().int().positive(),
+  id: z.coerce.number().int().positive(),
   active: z.boolean().default(true),
   creditLimitHuf: z.number().int().min(0).max(999999999).optional().default(0)
 });
 
 const passwordResetSchema = z.object({
-  id: z.number().int().positive()
+  id: z.coerce.number().int().positive()
 });
 
 const deleteSchema = z.object({
-  id: z.number().int().positive(),
+  id: z.coerce.number().int().positive(),
   reason: z.string().min(5).max(1000),
   confirm: z.literal(true)
 });

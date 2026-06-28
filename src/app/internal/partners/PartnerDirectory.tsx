@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { dateHU, money } from "@/lib/format";
 
 type PartnerRow = {
-  id: number;
+  id: number | string;
   name: string;
   billing_name: string | null;
   tax_number: string | null;
@@ -71,7 +71,7 @@ export function PartnerDirectory({
   const [editing, setEditing] = useState<PartnerRow | null>(null);
   const [deleting, setDeleting] = useState<PartnerRow | null>(null);
   const [message, setMessage] = useState("");
-  const [temporaryPassword, setTemporaryPassword] = useState<{ partnerId: number; username: string; password: string } | null>(null);
+  const [temporaryPassword, setTemporaryPassword] = useState<{ partnerId: number | string; username: string; password: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const hasActions = canWrite || canDelete;
 
@@ -95,7 +95,7 @@ export function PartnerDirectory({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: editing.id,
+        id: Number(editing.id),
         name: String(fd.get("name") ?? ""),
         billingName: String(fd.get("billingName") ?? ""),
         taxNumber: String(fd.get("taxNumber") ?? ""),
@@ -137,7 +137,7 @@ export function PartnerDirectory({
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: deleting.id,
+        id: Number(deleting.id),
         reason: String(fd.get("reason") ?? ""),
         confirm: fd.get("confirm") === "on"
       })
@@ -161,7 +161,7 @@ export function PartnerDirectory({
     const response = await fetch("/api/partners", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: partner.id })
+      body: JSON.stringify({ id: Number(partner.id) })
     });
     const data = await response.json().catch(() => ({}));
     setLoading(false);
