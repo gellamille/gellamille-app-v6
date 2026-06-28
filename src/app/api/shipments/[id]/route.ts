@@ -9,7 +9,14 @@ const schema = z.object({
   driverName: z.string().min(2).max(200),
   vehicle: z.string().max(120).optional().default(""),
   note: z.string().max(1000).optional().default(""),
-  status: z.enum(["planned", "loading", "in_transit", "completed", "cancelled"])
+  status: z.enum(["planned", "loading", "in_transit", "completed", "cancelled"]),
+  deliveryUpdates: z.array(z.object({
+    deliveryId: z.number().int().positive(),
+    sequenceNo: z.number().int().positive(),
+    status: z.enum(["planned", "picking", "loaded", "in_transit", "cancelled"])
+  })).optional().default([]),
+  removeDeliveryIds: z.array(z.number().int().positive()).optional().default([]),
+  addOrderIds: z.array(z.number().int().positive()).optional().default([])
 });
 
 const ROLES = ["admin", "management", "warehouse", "sales"];
@@ -50,10 +57,96 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
          where shipping_run_id=$1 and status not in ('delivered','cancelled') and archived_at is null
       `, [runId, input.plannedDate, input.status]);
 
+      if (input.removeDeliveryIds.length) {
+        await client.query(`
+          update public.deliveries d
+             set shipping_run_id=null,
+                 sequence_no=null,
+                 planned_date=coalesce(o.requested_delivery_date, $3::date),
+                 status=case when d.status in ('delivered','cancelled') then d.status else 'planned' end
+            from public.orders o
+           where d.order_id=o.id
+             and d.id = any($1::bigint[])
+             and d.shipping_run_id=$2
+             and d.organization_id=$4
+             and d.archived_at is null
+             and d.status not in ('delivered','cancelled')
+        `, [input.removeDeliveryIds, runId, input.plannedDate, user.organization_id]);
+      }
+
+      for (const delivery of input.deliveryUpdates) {
+        await client.query(`
+          update public.deliveries
+             set sequence_no=$2,
+                 status=$3,
+                 planned_date=$4
+           where id=$1
+             and shipping_run_id=$5
+             and organization_id=$6
+             and archived_at is null
+             and status not in ('delivered','cancelled')
+        `, [delivery.deliveryId, delivery.sequenceNo, delivery.status, input.plannedDate, runId, user.organization_id]);
+      }
+
+      if (input.addOrderIds.length) {
+        const maxSequence = await client.query<{ max_sequence: number | null }>(`
+          select max(sequence_no)::int as max_sequence
+            from public.deliveries
+           where shipping_run_id=$1 and archived_at is null and status not in ('delivered','cancelled')
+        `, [runId]);
+        let nextSequence = (maxSequence.rows[0]?.max_sequence ?? 0) + 1;
+
+        for (const orderId of [...new Set(input.addOrderIds)]) {
+          const orderResult = await client.query<any>(`
+            select id,organization_id,partner_id,delivery_address_id,status,fulfillment_status
+              from public.orders where id=$1 and archived_at is null for update
+          `, [orderId]);
+          const order = orderResult.rows[0];
+          if (!order || order.organization_id !== user.organization_id) throw new Error(`A rendelés nem található: ${orderId}`);
+          if (!["approved", "partially_approved"].includes(order.status)) {
+            throw new Error("Csak elfogadott rendelés tehető szállítási járatba.");
+          }
+          if (!["reserved", "partially_reserved", "picking", "packed", "partially_delivered"].includes(order.fulfillment_status)) {
+            throw new Error("Csak foglalt vagy összekészített rendelés tehető szállítási járatba.");
+          }
+          const delivered = await client.query(`select 1 from public.deliveries where order_id=$1 and status='delivered' and archived_at is null limit 1`, [order.id]);
+          if (delivered.rowCount) throw new Error("Már átadott rendelés nem tehető új szállítási járatba.");
+
+          const existing = await client.query<any>(`
+            select id from public.deliveries
+             where order_id=$1 and organization_id=$2 and status not in ('delivered','cancelled')
+               and archived_at is null
+             order by created_at desc limit 1 for update
+          `, [order.id, user.organization_id]);
+
+          if (existing.rows[0]) {
+            await client.query(`
+              update public.deliveries
+                 set shipping_run_id=$2,planned_date=$3,sequence_no=$4,
+                     partner_id=$5,address_id=$6,status='planned'
+               where id=$1
+            `, [existing.rows[0].id, runId, input.plannedDate, nextSequence, order.partner_id, order.delivery_address_id]);
+          } else {
+            await client.query(`
+              insert into public.deliveries(
+                organization_id,shipping_run_id,order_id,partner_id,address_id,planned_date,sequence_no,status,created_by
+              ) values($1,$2,$3,$4,$5,$6,$7,'planned',$8)
+            `, [user.organization_id, runId, order.id, order.partner_id, order.delivery_address_id, input.plannedDate, nextSequence, user.user_id]);
+          }
+          nextSequence += 1;
+        }
+      }
+
       await client.query(`
         insert into public.audit_log(actor_user_id,action,entity_type,entity_id,after_data)
         values($1,'shipping_run.updated','shipping_run',$2,$3::jsonb)
-      `, [user.user_id, String(runId), JSON.stringify({ before: current, after: updated.rows[0] })]);
+      `, [user.user_id, String(runId), JSON.stringify({
+        before: current,
+        after: updated.rows[0],
+        deliveryUpdates: input.deliveryUpdates,
+        removeDeliveryIds: input.removeDeliveryIds,
+        addOrderIds: input.addOrderIds
+      })]);
       await client.query(`
         insert into public.notifications(organization_id,role_code,type,title,body,entity_type,entity_id)
         values($1,null,'shipping_run.updated','Szállítási járat módosítva',$2,'shipping_run',$3)

@@ -25,9 +25,14 @@ const deliveryStatusLabels: Record<string, string> = {
 export default async function ShipmentsPage() {
   const user = await requireAppUser(["admin", "management", "staff", "warehouse", "sales"]);
   const runs = await query<any>(`
-    select sr.*, count(d.id)::int as delivery_count
+    select sr.*,
+           count(d.id)::int as delivery_count,
+           coalesce(sum(o.total_cartons), 0)::int as total_cartons
       from public.shipping_runs sr
       left join public.deliveries d on d.shipping_run_id = sr.id
+        and d.status not in ('delivered','cancelled')
+        and d.archived_at is null
+      left join public.orders o on o.id = d.order_id and o.archived_at is null
      where sr.organization_id=$1
        and sr.archived_at is null
      group by sr.id
@@ -35,10 +40,13 @@ export default async function ShipmentsPage() {
      limit 100
   `, [user.organization_id]);
   const deliveries = await query<any>(`
-    select d.*, p.name as partner_name, o.order_number, sr.run_number, sr.driver_name
+    select d.*, p.name as partner_name, o.order_number, o.requested_delivery_date,
+           concat_ws(', ', pa.postal_code, pa.city, pa.address_line1) as delivery_address,
+           sr.run_number, sr.driver_name
       from public.deliveries d
       join public.partners p on p.id = d.partner_id
       join public.orders o on o.id = d.order_id
+      left join public.partner_addresses pa on pa.id = d.address_id
       left join public.shipping_runs sr on sr.id=d.shipping_run_id
      where d.status not in ('delivered','cancelled')
        and d.organization_id=$1
@@ -49,10 +57,13 @@ export default async function ShipmentsPage() {
   `, [user.organization_id]);
   const runDeliveries = await query<any>(`
     select d.id,d.shipping_run_id,d.sequence_no,d.status,d.planned_date,
-           p.name as partner_name,o.order_number,o.fulfillment_status,o.total_cartons
+           p.name as partner_name,o.order_number,o.requested_delivery_date,
+           o.fulfillment_status,o.total_cartons,
+           concat_ws(', ', pa.postal_code, pa.city, pa.address_line1) as delivery_address
       from public.deliveries d
       join public.partners p on p.id=d.partner_id
       join public.orders o on o.id=d.order_id
+      left join public.partner_addresses pa on pa.id = d.address_id
      where d.organization_id=$1
        and d.shipping_run_id is not null
        and d.archived_at is null
@@ -62,11 +73,16 @@ export default async function ShipmentsPage() {
   `, [user.organization_id]);
   const candidates = await query<any>(`
     select o.id,o.order_number,p.name as partner_name,o.requested_delivery_date,
-           o.fulfillment_status,o.total_cartons,sr.run_number
+           o.fulfillment_status,o.total_cartons,
+           d.id as delivery_id,d.status as delivery_status,
+           sr.id as shipping_run_id,sr.run_number,
+           concat_ws(', ', pa.postal_code, pa.city, pa.address_line1) as delivery_address
       from public.orders o
       join public.partners p on p.id=o.partner_id
       left join public.deliveries d on d.order_id=o.id and d.status not in ('delivered','cancelled')
+        and d.archived_at is null
       left join public.shipping_runs sr on sr.id=d.shipping_run_id
+      left join public.partner_addresses pa on pa.id = coalesce(d.address_id, o.delivery_address_id)
      where o.organization_id=$1
        and o.archived_at is null
        and o.status in ('approved','partially_approved')
@@ -82,15 +98,15 @@ export default async function ShipmentsPage() {
         <div>
           <h2>Járatok</h2>
           <div className="table-wrap"><table><thead><tr><th>Járat</th><th>Dátum</th><th>Futár</th><th>Jármű</th><th>Állapot</th><th>Megálló</th></tr></thead><tbody>
-            {runs.map(r => <tr key={r.id}><td className="mono">{r.run_number}</td><td>{dateHU(r.planned_date)}</td><td>{r.driver_name ?? "—"}</td><td>{r.vehicle ?? "—"}</td><td><StatusBadge value={r.status} label={runStatusLabels[r.status] ?? r.status} /></td><td>{r.delivery_count}</td></tr>)}
+            {runs.map(r => <tr key={r.id}><td className="mono">{r.run_number}</td><td>{dateHU(r.planned_date)}</td><td>{r.driver_name ?? "—"}</td><td>{r.vehicle ?? "—"}</td><td><StatusBadge value={r.status} label={runStatusLabels[r.status] ?? r.status} /></td><td>{r.delivery_count}<div className="text-muted">{r.total_cartons} karton</div></td></tr>)}
             {!runs.length ? <tr><td colSpan={6}>Még nincs járat.</td></tr> : null}
           </tbody></table></div>
         </div>
         <div>
           <h2>Átadásra váró rendelések</h2>
-          <div className="table-wrap"><table><thead><tr><th>Sorrend</th><th>Járat</th><th>Rendelés</th><th>Partner</th><th>Futár</th><th>Nap</th><th>Állapot</th></tr></thead><tbody>
-            {deliveries.map(d => <tr key={d.id}><td>{d.sequence_no ?? "—"}</td><td className="mono">{d.run_number ?? "—"}</td><td className="mono">{d.order_number}</td><td>{d.partner_name}</td><td>{d.driver_name ?? "—"}</td><td>{dateHU(d.planned_date)}</td><td><StatusBadge value={d.status} label={deliveryStatusLabels[d.status] ?? d.status} /></td></tr>)}
-            {!deliveries.length ? <tr><td colSpan={7}>Nincs nyitott átadás.</td></tr> : null}
+          <div className="table-wrap"><table><thead><tr><th>Sorrend</th><th>Járat</th><th>Rendelés</th><th>Partner</th><th>Cím</th><th>Futár</th><th>Szállítás</th><th>Állapot</th></tr></thead><tbody>
+            {deliveries.map(d => <tr key={d.id}><td>{d.sequence_no ?? "—"}</td><td className="mono">{d.run_number ?? "—"}</td><td className="mono">{d.order_number}</td><td>{d.partner_name}</td><td>{d.delivery_address || "—"}</td><td>{d.driver_name ?? "—"}</td><td>{dateHU(d.planned_date)}<div className="text-muted">Kért: {dateHU(d.requested_delivery_date)}</div></td><td><StatusBadge value={d.status} label={deliveryStatusLabels[d.status] ?? d.status} /></td></tr>)}
+            {!deliveries.length ? <tr><td colSpan={8}>Nincs nyitott átadás.</td></tr> : null}
           </tbody></table></div>
         </div>
       </section>
