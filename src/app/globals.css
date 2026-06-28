@@ -94,6 +94,12 @@ button { cursor: pointer; }
 }
 .nav-submenu a { padding-left: 16px; font-size: 13px; }
 .sidebar nav a:hover, .nav-button:hover { background: rgba(255,255,255,.08); color: #fff; }
+.sidebar nav a.is-active {
+  background: rgba(255,255,255,.1);
+  color: #fff;
+  font-weight: 850;
+}
+.sidebar nav a.is-active::before { background: #bdc9c2; }
 .sidebar-bottom { flex-shrink: 0; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
 .nav-badge { margin-left: auto; min-width: 20px; height: 20px; border-radius: 999px; background: #d9473f; color: white; display: inline-grid; place-items: center; padding: 0 6px; font-size: 11px; font-weight: 900; }
 

@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import {
   Boxes, ClipboardList, Factory, LayoutDashboard, Truck,
   WalletCards, Users, ListTodo, FlaskConical, ChartNoAxesCombined,
@@ -52,6 +55,7 @@ const navGroups = [
 ] as const;
 
 export function InternalNav({ role, submittedOrders = 0 }: { role: string; submittedOrders?: number }) {
+  const pathname = usePathname();
   const groups = navGroups
     .map((group) => ({
       ...group,
@@ -69,9 +73,21 @@ export function InternalNav({ role, submittedOrders = 0 }: { role: string; submi
           <details className="nav-group" key={group.title} open>
             <summary className="nav-group-title"><group.Icon size={17} /><span>{group.title}</span></summary>
             <div className="nav-submenu">
-              {group.items.map(([href, label, Icon]) => (
-                <Link href={href} key={href}><Icon size={17} /><span>{label}</span>{href === "/internal/orders" && submittedOrders > 0 ? <span className="nav-badge">{submittedOrders}</span> : null}</Link>
-              ))}
+              {group.items.map(([href, label, Icon]) => {
+                const exact = pathname === href;
+                const nested = href !== "/internal" && pathname.startsWith(`${href}/`);
+                const hasMoreSpecificMatch = group.items.some(([otherHref]) => (
+                  otherHref !== href &&
+                  otherHref.startsWith(`${href}/`) &&
+                  (pathname === otherHref || pathname.startsWith(`${otherHref}/`))
+                ));
+                const isActive = exact || (nested && !hasMoreSpecificMatch);
+                return (
+                  <Link className={isActive ? "is-active" : undefined} href={href} key={href} aria-current={isActive ? "page" : undefined}>
+                    <Icon size={17} /><span>{label}</span>{href === "/internal/orders" && submittedOrders > 0 ? <span className="nav-badge">{submittedOrders}</span> : null}
+                  </Link>
+                );
+              })}
             </div>
           </details>
         ))}
