@@ -48,9 +48,7 @@ export default async function ProductionPage() {
                 <td>{l.allocated_units} db</td>
                 <td><strong>{l.available_units} db</strong></td>
                 <td><StatusBadge value={l.status} label={l.status === "active" ? "Aktív" : l.status === "void" ? "Sztornózott" : l.status} /></td>
-                <td>
-                  {l.carton_count > 0 ? <Link className="button button-small" href={`/internal/inventory/cartons/labels/${l.id}`}>Címkék</Link> : <span className="text-muted">-</span>}
-                </td>
+                <td><Link className="button button-small" href={`/internal/inventory/cartons/labels/${l.id}`}>{l.carton_count > 0 ? "Címkék" : "Kartonozás"}</Link></td>
               </tr>
             ))}
             {!lots.length ? <tr><td colSpan={12}>Még nincs LOT.</td></tr> : null}

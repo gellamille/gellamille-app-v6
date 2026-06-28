@@ -5,6 +5,7 @@ import { query } from "@/lib/db";
 import { dateHU } from "@/lib/format";
 import { requireAppUser } from "@/lib/auth";
 import { PrintLabelsButton } from "./PrintLabelsButton";
+import { GenerateCartonsButton } from "./GenerateCartonsButton";
 
 type LotRow = {
   id: number;
@@ -59,6 +60,8 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
      order by c.carton_code
   `, [user.organization_id, id]) : [];
   const unprintedCartons = cartons.filter((carton) => !carton.printed_at);
+  const cartonUnits = cartons.reduce((sum, carton) => sum + Number(carton.quantity_units ?? 0), 0);
+  const remainingUnits = lot ? Math.max(0, Number(lot.quantity ?? 0) - cartonUnits) : 0;
 
   if (!lot) {
     return (
@@ -77,6 +80,7 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
         actions={
           <>
             <Link href="/internal/production" className="button">Vissza a LOT listához</Link>
+            <GenerateCartonsButton lotId={lot.id} remainingUnits={remainingUnits} />
             <PrintLabelsButton
               lotId={lot.id}
               cartonIds={cartons.map((carton) => carton.id)}
@@ -89,11 +93,11 @@ export default async function CartonLabelsPage({ params }: { params: Promise<{ l
       <section className="card print-hide">
         <h2>Előnézet</h2>
         <p className="text-muted">
-          Ez az oldal csak ennek a LOT-nak a kartoncímkéit kezeli. A nyomtatás 100 × 70 mm-es kartoncímkére van optimalizálva,
-          a vonalkód tartalma csak a karton azonosító.
+          Itt történik a fizikai kartonozás adminisztrációja: a még kartonozatlan LOT mennyiségből karton rekordok és címkék készülnek.
+          A nyomtatás 100 × 70 mm-es kartoncímkére van optimalizálva, a vonalkód tartalma csak a karton azonosító.
         </p>
-        <p className="text-muted">{unprintedCartons.length} még nem nyomtatott címke · {cartons.length - unprintedCartons.length} korábban nyomtatott címke.</p>
-        {!cartons.length ? <div className="alert alert-warning">Ehhez a LOT-hoz még nincs létrehozott karton.</div> : null}
+        <p className="text-muted">{remainingUnits} db még kartonozatlan · {cartonUnits} db kartonban · {unprintedCartons.length} még nem nyomtatott címke · {cartons.length - unprintedCartons.length} korábban nyomtatott címke.</p>
+        {!cartons.length ? <div className="alert alert-warning">Ehhez a LOT-hoz még nincs létrehozott karton. Indítsd a kartonozás/címkék generálását.</div> : null}
       </section>
 
       <section className="label-sheet">

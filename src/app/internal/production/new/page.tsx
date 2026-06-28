@@ -16,7 +16,7 @@ export default async function NewLotPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Új LOT" description="A LOT létrehozása automatikusan készletbevételezést és eladható készletet hoz létre." />
+      <PageHeader title="Új LOT" description="A LOT létrehozása készletbevételezést hoz létre. A fizikai kartonok a kartonozás/címkézés lépésnél készülnek." />
       <NewLotForm products={products} operators={operators} />
     </div>
   );

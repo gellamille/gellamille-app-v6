@@ -89,39 +89,6 @@ export async function POST(request: Request) {
         ) values($1,$2,$3,$4,'production_receipt',$5,$6,$7,$8)
       `, [user.organization_id, product.id, lot.id, location.id, input.quantity, purchasePrice, "LOT létrehozás és automatikus készletre vétel", user.user_id]);
 
-      const fullCartons = Math.floor(input.quantity / unitsPerCarton);
-      const remainderUnits = input.quantity % unitsPerCarton;
-      const cartonQuantities = [
-        ...Array.from({ length: fullCartons }, () => unitsPerCarton),
-        ...(remainderUnits > 0 ? [remainderUnits] : [])
-      ];
-      const cartonSummary = cartonQuantities.length ? await client.query<{
-        carton_count: number;
-        first_carton_code: string | null;
-        last_carton_code: string | null;
-      }>(`
-        with inserted as (
-          insert into public.inventory_cartons(
-            organization_id,product_id,lot_id,location_id,quantity_units,status,created_by
-          )
-          select $1,$2,$3,$4,quantity_units,'in_stock',$5
-            from unnest($6::integer[]) as carton(quantity_units)
-          returning id,carton_code,quantity_units
-        ), logged as (
-          insert into public.inventory_carton_events(
-            organization_id,carton_id,event_type,to_location_id,actor_user_id,note,event_data
-          )
-          select $1,id,'received',$4,$5,'LOT létrehozásból automatikusan készletre vett karton',
-                 jsonb_build_object('lot_id',$3,'quantity_units',quantity_units)
-            from inserted
-          returning id
-        )
-        select count(*)::int as carton_count,
-               min(carton_code) as first_carton_code,
-               max(carton_code) as last_carton_code
-          from inserted
-      `, [user.organization_id, product.id, lot.id, location.id, user.user_id, cartonQuantities]) : { rows: [{ carton_count: 0, first_carton_code: null, last_carton_code: null }] };
-
       await client.query(`
         insert into public.audit_log(actor_user_id,action,entity_type,entity_id,after_data)
         values($1,'lot.created_and_received','lot',$2,$3::jsonb)
@@ -131,9 +98,8 @@ export async function POST(request: Request) {
         product_id: product.id,
         purchase_unit_price_huf: purchasePrice,
         units_per_carton: unitsPerCarton,
-        carton_count: cartonSummary.rows[0]?.carton_count ?? 0,
-        first_carton_code: cartonSummary.rows[0]?.first_carton_code ?? null,
-        last_carton_code: cartonSummary.rows[0]?.last_carton_code ?? null
+        carton_count: 0,
+        carton_flow: "cartons_are_created_during_label_generation"
       })]);
 
       return {
@@ -141,9 +107,9 @@ export async function POST(request: Request) {
         purchase_unit_price_huf: purchasePrice,
         product_id: product.id,
         units_per_carton: unitsPerCarton,
-        carton_count: cartonSummary.rows[0]?.carton_count ?? 0,
-        first_carton_code: cartonSummary.rows[0]?.first_carton_code ?? null,
-        last_carton_code: cartonSummary.rows[0]?.last_carton_code ?? null
+        carton_count: 0,
+        first_carton_code: null,
+        last_carton_code: null
       };
     });
 
