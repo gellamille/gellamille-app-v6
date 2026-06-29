@@ -50,26 +50,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       const beforeResult = await client.query<OrderRow>(`
         select id,order_number,order_year,organization_id,partner_id,status,fulfillment_status,finance_status,requested_delivery_date
           from public.orders
-         where id=$1 and archived_at is null
+         where id=$1 and organization_id=$2 and archived_at is null
          for update
-      `, [orderId]);
+      `, [orderId, user.organization_id]);
       const order = beforeResult.rows[0];
-      if (!order || order.organization_id !== user.organization_id) throw new Error("A rendelés nem található.");
+      if (!order) throw new Error("A rendelés nem található.");
       assertEditableOrder(order);
       await assertNoDeliveredItems(client, order.id);
       if (Number(order.order_year) !== Number(input.requestedDeliveryDate.slice(0, 4))) {
         throw new Error("A rendelés éve nem módosítható. Másik évre új rendelést kell rögzíteni.");
       }
 
-      await validatePartnerDeliveryDate(client, order.partner_id, input.requestedDeliveryDate);
-      await validateDeliveryAddress(client, order.partner_id, input.deliveryAddressId ?? null);
+      await validatePartnerDeliveryDate(client, order.partner_id, order.organization_id, input.requestedDeliveryDate);
+      await validateDeliveryAddress(client, order.partner_id, order.organization_id, input.deliveryAddressId ?? null);
 
       const beforeItems = await client.query(`select * from public.order_items where order_id=$1 order by id for update`, [order.id]);
       await releaseOrderStock(client, order, user.user_id, "Rendelés módosítása miatt visszarendezve");
 
       const items = mergeItems(input.items);
       const totalRequestedCartons = items.reduce((sum, item) => sum + item.cartons, 0);
-      await validateMinimumOrder(client, order.partner_id, totalRequestedCartons);
+      await validateMinimumOrder(client, order.partner_id, order.organization_id, totalRequestedCartons);
       const existingByProduct = new Map(beforeItems.rows.map((item: any) => [Number(item.product_id), item]));
       const nextProductIds = new Set(items.map((item) => item.productId));
       const updatedItems = [];
@@ -88,7 +88,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
                 unit_quantity=$10,net_total_huf=$11,vat_total_huf=$12,gross_total_huf=$13,
                 purchase_unit_price_huf_snapshot=$14,reserved_quantity=0,fulfilled_quantity=0,cancelled_quantity=0,
                 version=version+1
-              where id=$1
+              where id=$1 and order_id=$15
               returning *
             `, [
               existing.id,
@@ -104,7 +104,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
               net,
               vat,
               gross,
-              product.purchase_unit_price_huf ?? 0
+              product.purchase_unit_price_huf ?? 0,
+              order.id
             ])
           : await client.query(`
           insert into public.order_items(
@@ -138,9 +139,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           update public.order_items set
             cartons=0,unit_quantity=0,net_total_huf=0,vat_total_huf=0,gross_total_huf=0,
             reserved_quantity=0,fulfilled_quantity=0,cancelled_quantity=0,version=version+1
-          where id=$1
+          where id=$1 and order_id=$2
           returning *
-        `, [oldItem.id]);
+        `, [oldItem.id, order.id]);
         updatedItems.push(cleared.rows[0]);
       }
 
@@ -169,7 +170,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
                approved_by=null,
                approved_at=null,
                version=version+1
-         where id=$1
+         where id=$1 and organization_id=$11
          returning *
       `, [
         order.id,
@@ -181,7 +182,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         total.total_units,
         total.net_total_huf,
         total.vat_total_huf,
-        total.gross_total_huf
+        total.gross_total_huf,
+        order.organization_id
       ]);
 
       await client.query(`
@@ -213,11 +215,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       const beforeResult = await client.query<OrderRow>(`
         select id,order_number,order_year,organization_id,partner_id,status,fulfillment_status,finance_status,requested_delivery_date
           from public.orders
-         where id=$1 and archived_at is null
+         where id=$1 and organization_id=$2 and archived_at is null
          for update
-      `, [orderId]);
+      `, [orderId, user.organization_id]);
       const order = beforeResult.rows[0];
-      if (!order || order.organization_id !== user.organization_id) throw new Error("A rendelés nem található.");
+      if (!order) throw new Error("A rendelés nem található.");
       assertEditableOrder(order);
       await assertNoDeliveredItems(client, order.id);
       const beforeItems = await client.query(`select * from public.order_items where order_id=$1 order by id`, [order.id]);
@@ -233,9 +235,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
                void_reason=$3,
                archived_at=now(),
                version=version+1
-         where id=$1
+         where id=$1 and organization_id=$4
          returning *
-      `, [order.id, user.user_id, input.reason]);
+      `, [order.id, user.user_id, input.reason, order.organization_id]);
 
       await client.query(`
         insert into public.audit_log(actor_user_id,action,entity_type,entity_id,before_data,after_data)
@@ -270,14 +272,15 @@ function mergeItems(items: Array<{ productId: number; cartons: number }>) {
   return [...merged.entries()].map(([productId, cartons]) => ({ productId, cartons }));
 }
 
-async function validatePartnerDeliveryDate(client: any, partnerId: number, requestedDeliveryDate: string) {
+async function validatePartnerDeliveryDate(client: any, partnerId: number, organizationId: number, requestedDeliveryDate: string) {
   const result = await client.query(`
     select count(*)::int as configured_count,
            coalesce(bool_or(weekday=extract(isodow from $2::date)::int), false) as selected_allowed,
            min(cutoff_business_days) filter (where weekday=extract(isodow from $2::date)::int)::int as cutoff_days
       from public.partner_delivery_days
      where partner_id=$1 and active=true
-  `, [partnerId, requestedDeliveryDate]);
+       and exists(select 1 from public.partners p where p.id=partner_id and p.organization_id=$3 and p.archived_at is null)
+  `, [partnerId, requestedDeliveryDate, organizationId]);
   const policy = result.rows[0];
   if (Number(policy?.configured_count ?? 0) < 1) throw new Error("Ehhez a partnerhez nincs aktív szállítási nap beállítva.");
   if (!policy?.selected_allowed) throw new Error("A kiválasztott dátum nem engedélyezett szállítási nap ennél a partnernél.");
@@ -293,14 +296,19 @@ async function validatePartnerDeliveryDate(client: any, partnerId: number, reque
   }
 }
 
-async function validateDeliveryAddress(client: any, partnerId: number, deliveryAddressId: number | null) {
+async function validateDeliveryAddress(client: any, partnerId: number, organizationId: number, deliveryAddressId: number | null) {
   if (!deliveryAddressId) return;
-  const address = await client.query(`select 1 from public.partner_addresses where id=$1 and partner_id=$2 and active=true`, [deliveryAddressId, partnerId]);
+  const address = await client.query(`
+    select 1
+      from public.partner_addresses a
+      join public.partners p on p.id=a.partner_id
+     where a.id=$1 and a.partner_id=$2 and p.organization_id=$3 and a.active=true
+  `, [deliveryAddressId, partnerId, organizationId]);
   if (!address.rowCount) throw new Error("A kiválasztott szállítási cím nem érvényes.");
 }
 
-async function validateMinimumOrder(client: any, partnerId: number, totalCartons: number) {
-  const partner = await client.query(`select minimum_order_cartons from public.partners where id=$1`, [partnerId]);
+async function validateMinimumOrder(client: any, partnerId: number, organizationId: number, totalCartons: number) {
+  const partner = await client.query(`select minimum_order_cartons from public.partners where id=$1 and organization_id=$2`, [partnerId, organizationId]);
   const minimum = Number(partner.rows[0]?.minimum_order_cartons ?? 0);
   if (totalCartons < minimum) throw new Error(`A minimum rendelés ${minimum} karton.`);
 }
@@ -372,7 +380,7 @@ async function queueOrderEmail(client: any, organizationId: number, partnerId: n
     select email from public.notification_recipients
      where organization_id=$1 and event_type in ($2,'order_changed') and active=true
   `, [organizationId, eventType]);
-  const partner = await client.query(`select email,name from public.partners where id=$1`, [partnerId]);
+  const partner = await client.query(`select email,name from public.partners where id=$1 and organization_id=$2`, [partnerId, organizationId]);
   const emails = new Set<string>();
   for (const row of recipients.rows) emails.add(row.email);
   if (partner.rows[0]?.email) emails.add(partner.rows[0].email);

@@ -16,13 +16,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const orderId = Number(id);
     const order = await transaction(async (client) => {
       await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
-      const current = await client.query<any>(`select * from public.orders where id=$1 and partner_id=$2 and archived_at is null for update`, [orderId, user.partner_id]);
+      const current = await client.query<any>(`
+        select *
+          from public.orders
+         where id=$1 and partner_id=$2 and organization_id=$3 and archived_at is null
+         for update
+      `, [orderId, user.partner_id, user.organization_id]);
       if (!current.rows[0]) throw new Error("A rendelés nem található.");
       if (current.rows[0].status !== "submitted") throw new Error("Csak a még el nem fogadott rendelés vonható vissza.");
       const updated = await client.query<any>(`
         update public.orders set status='cancelled',fulfillment_status='cancelled',
-          voided_by=$2,voided_at=now(),void_reason=$3 where id=$1 returning *
-      `, [orderId, user.user_id, reason.trim()]);
+          voided_by=$2,voided_at=now(),void_reason=$3
+         where id=$1 and partner_id=$4 and organization_id=$5
+         returning *
+      `, [orderId, user.user_id, reason.trim(), user.partner_id, user.organization_id]);
       return updated.rows[0];
     });
     return NextResponse.json(order);

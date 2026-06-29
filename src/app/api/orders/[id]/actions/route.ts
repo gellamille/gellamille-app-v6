@@ -36,10 +36,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
       const orderResult = await client.query<OrderRow>(`
         select id,organization_id,partner_id,status,fulfillment_status,requested_delivery_date,delivery_address_id
-          from public.orders where id=$1 and archived_at is null for update
-      `, [orderId]);
+          from public.orders
+         where id=$1 and organization_id=$2 and archived_at is null
+         for update
+      `, [orderId, user.organization_id]);
       const order = orderResult.rows[0];
-      if (!order || order.organization_id !== user.organization_id) throw new Error("A rendelés nem található.");
+      if (!order) throw new Error("A rendelés nem található.");
 
       let payload: unknown;
       if (input.action === "approve") payload = await approveOrder(client, order, user.user_id, input.allowPartial);
@@ -69,7 +71,7 @@ async function approveOrder(client: any, order: OrderRow, userId: string, allowP
   if (!["submitted", "stock_shortage", "partially_approved"].includes(order.status)) {
     throw new Error("Csak beérkezett vagy készlethiányos rendelés fogadható el.");
   }
-  const partnerResult = await client.query(`select overdue_policy from public.partners where id=$1`, [order.partner_id]);
+  const partnerResult = await client.query(`select overdue_policy from public.partners where id=$1 and organization_id=$2`, [order.partner_id, order.organization_id]);
   const overduePolicy = partnerResult.rows[0]?.overdue_policy ?? "warn";
   const overdue = await client.query(`select coalesce(sum(outstanding_huf),0)::bigint amount from public.v_receivables_open where partner_id=$1 and due_date<current_date`, [order.partner_id]);
   const overdueAmount = Number(overdue.rows[0]?.amount ?? 0);
@@ -116,8 +118,8 @@ async function approveOrder(client: any, order: OrderRow, userId: string, allowP
   const updated = await client.query(`
     update public.orders set status=$2,fulfillment_status=$3,accepted_with_shortage=$4,
       approved_by=$5,approved_at=now()
-    where id=$1 returning *
-  `, [order.id, status, fulfillment, !all, userId]);
+    where id=$1 and organization_id=$6 returning *
+  `, [order.id, status, fulfillment, !all, userId, order.organization_id]);
 
   if (overdueAmount > 0 && overduePolicy === "warn") {
     await client.query(`
@@ -158,9 +160,10 @@ async function allocateFefo(client: any, order: OrderRow, userId: string) {
                      where a.lot_id=l.id and a.location_id=$2 and a.status in ('allocated','picked')),0))::int available_units
           from public.lots l
           join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml
-         where p.id=$1 and l.status='active' and l.best_before>=current_date
+         where p.id=$1 and p.organization_id=l.organization_id and l.organization_id=$3
+           and l.status='active' and l.best_before>=current_date
          order by l.best_before,l.production_date,l.id
-      `, [item.product_id, locationId]);
+      `, [item.product_id, locationId, order.organization_id]);
 
       for (const lot of lots.rows) {
         if (remaining <= 0) break;
@@ -179,7 +182,7 @@ async function allocateFefo(client: any, order: OrderRow, userId: string) {
 
   await client.query(`update public.order_item_lot_allocations set status='picked' where order_item_id in (select id from public.order_items where order_id=$1) and status='allocated'`, [order.id]);
   const packed = totalRequired > 0 && totalAllocated >= totalRequired;
-  const updated = await client.query(`update public.orders set fulfillment_status=$2 where id=$1 returning *`, [order.id, packed ? "packed" : "picking"]);
+  const updated = await client.query(`update public.orders set fulfillment_status=$2 where id=$1 and organization_id=$3 returning *`, [order.id, packed ? "packed" : "picking", order.organization_id]);
   return { ...updated.rows[0], allocation_complete: packed, allocated_units: totalAllocated, reserved_units: totalReserved, required_units: totalRequired };
 }
 
@@ -199,8 +202,9 @@ async function deliverAll(client: any, order: OrderRow, userId: string) {
     ? await client.query(`
         update public.deliveries
            set partner_id=$2,address_id=$3,planned_date=coalesce(planned_date,$4),status=case when status='planned' then 'planned' else status end
-         where id=$1 returning *
-      `, [existingDelivery.rows[0].id, order.partner_id, order.delivery_address_id, order.requested_delivery_date])
+         where id=$1 and organization_id=$5
+         returning *
+      `, [existingDelivery.rows[0].id, order.partner_id, order.delivery_address_id, order.requested_delivery_date, order.organization_id])
     : await client.query(`
         insert into public.deliveries(organization_id,order_id,partner_id,address_id,planned_date,status,created_by)
         values($1,$2,$3,$4,$5,'planned',$6) returning *
@@ -236,9 +240,9 @@ async function deliverAll(client: any, order: OrderRow, userId: string) {
         insert into public.inventory_movements(organization_id,product_id,lot_id,location_id,movement_type,quantity_units,unit_cost_huf,reason,order_id,delivery_id,created_by)
         values($1,$2,$3,$4,'delivery_issue',$5,$6,'Partneri átadás',$7,$8,$9)
       `, [order.organization_id, item.product_id, allocation.lot_id, allocation.location_id ?? locationId, -Number(allocation.quantity_units), Number(allocation.purchase_unit_price_huf ?? 0), order.id, delivery.id, userId]);
-      await client.query(`update public.order_item_lot_allocations set status='delivered',delivered_at=now() where id=$1`, [allocation.id]);
+      await client.query(`update public.order_item_lot_allocations set status='delivered',delivered_at=now() where id=$1 and order_item_id=$2`, [allocation.id, item.id]);
       if (allocation.carton_id) {
-        await client.query(`update public.inventory_cartons set status='delivered' where id=$1`, [allocation.carton_id]);
+        await client.query(`update public.inventory_cartons set status='delivered' where id=$1 and organization_id=$2`, [allocation.carton_id, order.organization_id]);
         await client.query(`
           insert into public.inventory_carton_events(
             organization_id,carton_id,event_type,from_location_id,order_id,order_item_id,actor_user_id,note,event_data
@@ -255,22 +259,22 @@ async function deliverAll(client: any, order: OrderRow, userId: string) {
       }
       await client.query(`
         update public.lots set status='depleted'
-         where id=$1 and status='active'
+         where id=$1 and organization_id=$2 and status='active'
            and not exists(select 1 from public.v_lot_stock_summary v where v.lot_id=$1 and v.physical_units>0)
-      `, [allocation.lot_id]);
+      `, [allocation.lot_id, order.organization_id]);
     }
 
     await client.query(`
       update public.order_items set fulfilled_quantity=fulfilled_quantity+$2,
         reserved_quantity=greatest(reserved_quantity-$2,0)
-      where id=$1
-    `, [item.id, deliveredUnits]);
+      where id=$1 and order_id=$3
+    `, [item.id, deliveredUnits, order.id]);
     await client.query(`update public.stock_reservations set status='fulfilled',released_at=now() where order_item_id=$1 and status='active'`, [item.id]);
     deliveredTotal += deliveredUnits;
   }
 
   if (deliveredTotal <= 0) throw new Error("Nincs átadható, LOT-hoz rendelt tétel.");
-  const completed = await client.query(`update public.deliveries set status='delivered',delivered_at=now() where id=$1 returning *`, [delivery.id]);
+  const completed = await client.query(`update public.deliveries set status='delivered',delivered_at=now() where id=$1 and organization_id=$2 returning *`, [delivery.id, order.organization_id]);
   return completed.rows[0];
 }
 
@@ -329,7 +333,7 @@ async function cancelOrReject(client: any, order: OrderRow, userId: string, acti
       voided_by=case when $2='cancelled' then $3::uuid else voided_by end,
       voided_at=case when $2='cancelled' then now() else voided_at end,
       void_reason=case when $2='cancelled' then $4 else void_reason end
-    where id=$1 returning *
-  `, [order.id, status, userId, cleanReason]);
+    where id=$1 and organization_id=$5 returning *
+  `, [order.id, status, userId, cleanReason, order.organization_id]);
   return updated.rows[0];
 }

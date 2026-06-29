@@ -77,6 +77,14 @@ export async function POST(request: Request) {
           throw new Error("A bruttó összegnek meg kell egyeznie a nettó és az áfa összegével.");
         }
         if (input.status === "paid" && !input.paymentDate) throw new Error("Kifizetett kiadásnál a kifizetés dátuma kötelező.");
+        if (input.categoryId) {
+          const category = await client.query(`
+            select 1
+              from public.expense_categories
+             where id=$1 and organization_id=$2 and archived_at is null
+          `, [input.categoryId, user.organization_id]);
+          if (!category.rowCount) throw new Error("A kiadás kategória nem található.");
+        }
         const expense = await client.query<any>(`
           insert into public.expenses(
             organization_id,category_id,description,performance_date,payment_date,

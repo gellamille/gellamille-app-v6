@@ -27,9 +27,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const result = await transaction(async (client) => {
       await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
-      const before = await client.query<any>(`select * from public.products where id=$1 for update`, [productId]);
+      const before = await client.query<any>(`select * from public.products where id=$1 and organization_id=$2 for update`, [productId, user.organization_id]);
       const product = before.rows[0];
-      if (!product || Number(product.organization_id) !== Number(user.organization_id)) throw new Error("A termék nem található.");
+      if (!product) throw new Error("A termék nem található.");
 
       const updated = await client.query(`
         update public.products set

@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:api": "node --test scripts/api-critical-flow.test.mjs",
+    "release:check": "node scripts/release-check.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

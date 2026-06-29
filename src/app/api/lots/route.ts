@@ -23,7 +23,7 @@ export async function GET() {
   const rows = await query(`
     select l.*, p.id as product_id, p.name as product_name, p.sku
       from public.lots l
-      join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml
+      join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml and p.organization_id=l.organization_id
      where l.organization_id=$1
        and l.archived_at is null
      order by l.created_at desc limit 500
@@ -46,14 +46,13 @@ export async function POST(request: Request) {
         units_per_carton: number; organization_id: number; active: boolean; status: string;
       }>(`
         select id,flavor_code,size_ml,purchase_unit_price_huf,units_per_carton,organization_id,active,status
-          from public.products where id=$1 for update
-      `, [input.productId]);
+          from public.products
+         where id=$1 and organization_id=$2
+         for update
+      `, [input.productId, user.organization_id]);
       const product = productResult.rows[0];
       if (!product || !product.active || !["active", "seasonal"].includes(product.status)) {
         throw new Error("A kiválasztott termék nem aktív.");
-      }
-      if (product.organization_id !== user.organization_id) {
-        throw new Error("A termék másik szervezethez tartozik.");
       }
       const unitsPerCarton = Number(product.units_per_carton ?? 0);
       if (!Number.isInteger(unitsPerCarton) || unitsPerCarton <= 0) {
@@ -72,8 +71,8 @@ export async function POST(request: Request) {
       const purchasePrice = input.purchaseUnitPriceHuf || product.purchase_unit_price_huf || 0;
       await client.query(`
         update public.lots
-           set organization_id=$1,purchase_unit_price_huf=$2
-         where id=$3
+         set organization_id=$1,purchase_unit_price_huf=$2
+         where id=$3 and (organization_id is null or organization_id=$1)
       `, [user.organization_id, purchasePrice, lot.id]);
 
       const locationResult = await client.query<{ id: number }>(`

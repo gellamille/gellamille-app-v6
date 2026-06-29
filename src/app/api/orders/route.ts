@@ -53,12 +53,14 @@ export async function POST(request: Request) {
       await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
 
       const partnerResult = await client.query<any>(`
-        select id,name,organization_id,active,minimum_order_cartons,default_payment_method,
-               overdue_policy,credit_limit_huf,price_list_id
-          from public.partners where id=$1 and archived_at is null for update
-      `, [partnerId]);
+          select id,name,organization_id,active,minimum_order_cartons,default_payment_method,
+                 overdue_policy,credit_limit_huf,price_list_id
+          from public.partners
+         where id=$1 and organization_id=$2 and archived_at is null
+         for update
+      `, [partnerId, user.organization_id]);
       const partner = partnerResult.rows[0];
-      if (!partner?.active || partner.organization_id !== user.organization_id) {
+      if (!partner?.active) {
         throw new Error("A partner nem található vagy inaktív.");
       }
       if (user.role === "partner" && partner.overdue_policy === "block") {
@@ -86,7 +88,8 @@ export async function POST(request: Request) {
                min(cutoff_business_days) filter (where weekday=extract(isodow from $2::date)::int)::int as cutoff_days
           from public.partner_delivery_days
          where partner_id=$1 and active=true
-      `, [partnerId, input.requestedDeliveryDate]);
+           and exists(select 1 from public.partners p where p.id=partner_id and p.organization_id=$3 and p.archived_at is null)
+      `, [partnerId, input.requestedDeliveryDate, user.organization_id]);
       const deliveryPolicy = deliveryDayResult.rows[0];
       if (Number(deliveryPolicy?.configured_count ?? 0) < 1) {
         throw new Error("Ehhez a partnerhez nincs aktív szállítási nap beállítva.");
@@ -106,10 +109,20 @@ export async function POST(request: Request) {
       }
 
       if (input.deliveryAddressId) {
-        const address = await client.query(`select 1 from public.partner_addresses where id=$1 and partner_id=$2 and active=true`, [input.deliveryAddressId, partnerId]);
+        const address = await client.query(`
+          select 1
+            from public.partner_addresses a
+            join public.partners p on p.id=a.partner_id
+           where a.id=$1 and a.partner_id=$2 and p.organization_id=$3 and a.active=true
+        `, [input.deliveryAddressId, partnerId, user.organization_id]);
         if (!address.rowCount) throw new Error("A kiválasztott szállítási cím nem érvényes.");
       } else if (user.role === "partner") {
-        const addresses = await client.query(`select count(*)::int as count from public.partner_addresses where partner_id=$1 and active=true`, [partnerId]);
+        const addresses = await client.query(`
+          select count(*)::int as count
+            from public.partner_addresses a
+            join public.partners p on p.id=a.partner_id
+           where a.partner_id=$1 and p.organization_id=$2 and a.active=true
+        `, [partnerId, user.organization_id]);
         if (Number(addresses.rows[0]?.count ?? 0) > 0) {
           throw new Error("A szállítási cím kiválasztása kötelező.");
         }
@@ -168,10 +181,10 @@ export async function POST(request: Request) {
             net_unit_price_huf_snapshot=$6,vat_rate_bps_snapshot=$7,
             unit_quantity=$8,net_total_huf=$9,vat_total_huf=$10,gross_total_huf=$11,
             purchase_unit_price_huf_snapshot=$12
-          where id=$13
+          where id=$13 and order_id=$14
         `, [product.code, product.name, product.flavor_code, product.size_ml, product.units_per_carton,
           product.effective_price, product.vat_rate_bps, units, net, vat, gross,
-          product.purchase_unit_price_huf ?? 0, row.id]);
+          product.purchase_unit_price_huf ?? 0, row.id, order.id]);
       }
 
       const totalsResult = await client.query<any>(`
@@ -188,9 +201,9 @@ export async function POST(request: Request) {
           status=case when $7 then 'submitted' else 'draft' end,
           submitted_by=case when $7 then $8::uuid else null end,
           submitted_at=case when $7 then now() else null end
-        where id=$1 returning *
+        where id=$1 and organization_id=$9 returning *
       `, [order.id, totals.total_cartons, totals.total_units, totals.net_total_huf,
-        totals.vat_total_huf, totals.gross_total_huf, input.submit, user.user_id]);
+        totals.vat_total_huf, totals.gross_total_huf, input.submit, user.user_id, user.organization_id]);
 
       await client.query(`
         insert into public.audit_log(actor_user_id,action,entity_type,entity_id,after_data)

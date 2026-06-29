@@ -79,9 +79,9 @@ export async function POST(request: Request) {
       const updated = await client.query<any>(`
         update public.inventory_cartons
            set location_id=$2
-         where id=$1
+         where id=$1 and organization_id=$3
          returning carton_code,quantity_units,status
-      `, [carton.id, toLocation.id]);
+      `, [carton.id, toLocation.id, user.organization_id]);
 
       await client.query(`
         insert into public.inventory_carton_events(

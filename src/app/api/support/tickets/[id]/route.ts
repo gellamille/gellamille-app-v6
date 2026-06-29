@@ -22,8 +22,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!(await supportTablesReady())) throw new Error("Az ügyfélszolgálati ticket modul adatbázis migrációja még nincs alkalmazva.");
     const input = updateSchema.parse(await request.json());
 
-    const ticket = await one<any>(`select * from public.support_tickets where id=$1 and archived_at is null`, [ticketId]);
-    if (!ticket || ticket.organization_id !== user.organization_id) throw new Error("A ticket nem található.");
+    const ticket = await one<any>(`select * from public.support_tickets where id=$1 and organization_id=$2 and archived_at is null`, [ticketId, user.organization_id]);
+    if (!ticket) throw new Error("A ticket nem található.");
+
+    if (input.assignedTo) {
+      const assignee = await query(`
+        select 1
+          from public.app_users
+         where user_id=$1 and organization_id=$2 and active=true and role<>'partner'
+      `, [input.assignedTo, user.organization_id]);
+      if (!assignee.length) throw new Error("A kiválasztott címzett nem található.");
+    }
 
     const rows = await query<any>(`
       update public.support_tickets

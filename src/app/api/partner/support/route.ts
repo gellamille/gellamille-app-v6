@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       ]);
       const task = taskResult.rows[0];
 
-      await client.query(`update public.support_tickets set task_id=$1 where id=$2`, [task.id, ticket.id]);
+      await client.query(`update public.support_tickets set task_id=$1 where id=$2 and organization_id=$3 and partner_id=$4`, [task.id, ticket.id, user.organization_id, partner.id]);
 
       await client.query(`
         insert into public.notifications(organization_id,role_code,type,title,body,entity_type,entity_id)

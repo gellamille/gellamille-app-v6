@@ -34,11 +34,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const orderResult = await client.query<OrderRow>(`
         select id,organization_id,status,fulfillment_status
           from public.orders
-         where id=$1 and archived_at is null
+         where id=$1 and organization_id=$2 and archived_at is null
          for update
-      `, [orderId]);
+      `, [orderId, user.organization_id]);
       const order = orderResult.rows[0];
-      if (!order || order.organization_id !== user.organization_id) throw new Error("A rendelés nem található.");
+      if (!order) throw new Error("A rendelés nem található.");
       if (!["approved", "partially_approved"].includes(order.status)) {
         throw new Error("Csak elfogadott rendeléshez lehet kartont összekészíteni.");
       }
@@ -75,9 +75,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           from public.order_item_lot_allocations a
           join public.order_items oi on oi.id=a.order_item_id
           join public.orders o on o.id=oi.order_id
-         where a.carton_id=$1 and a.status in ('allocated','picked')
+         where a.carton_id=$1 and o.organization_id=$2 and a.status in ('allocated','picked')
          limit 1
-      `, [carton.id]);
+      `, [carton.id, user.organization_id]);
       if (activeAllocation.rows[0]) {
         throw new Error(`Ez a karton már aktív rendeléshez van rendelve: ${activeAllocation.rows[0].order_number}.`);
       }
@@ -122,8 +122,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await client.query(`
         update public.inventory_cartons
            set status='picked'
-         where id=$1
-      `, [carton.id]);
+         where id=$1 and organization_id=$2
+      `, [carton.id, user.organization_id]);
 
       await client.query(`
         insert into public.inventory_carton_events(
@@ -162,8 +162,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await client.query(`
         update public.orders
            set fulfillment_status=$2
-         where id=$1
-      `, [order.id, packed ? "packed" : "picking"]);
+         where id=$1 and organization_id=$3
+      `, [order.id, packed ? "packed" : "picking", user.organization_id]);
 
       await client.query(`
         insert into public.audit_log(actor_user_id,action,entity_type,entity_id,after_data)
@@ -216,11 +216,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       const orderResult = await client.query<OrderRow>(`
         select id,organization_id,status,fulfillment_status
           from public.orders
-         where id=$1 and archived_at is null
+         where id=$1 and organization_id=$2 and archived_at is null
          for update
-      `, [orderId]);
+      `, [orderId, user.organization_id]);
       const order = orderResult.rows[0];
-      if (!order || order.organization_id !== user.organization_id) throw new Error("A rendelés nem található.");
+      if (!order) throw new Error("A rendelés nem található.");
       if (["delivered", "cancelled"].includes(order.fulfillment_status) || ["closed", "cancelled", "void"].includes(order.status)) {
         throw new Error("Lezárt vagy átadott rendelésből karton nem vonható vissza ezzel a művelettel.");
       }
@@ -246,8 +246,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         throw new Error("Csak még nem átadott karton összekészítése vonható vissza.");
       }
 
-      await client.query(`update public.order_item_lot_allocations set status='released' where id=$1`, [allocation.id]);
-      await client.query(`update public.inventory_cartons set status='in_stock' where id=$1`, [allocation.carton_id]);
+      await client.query(`update public.order_item_lot_allocations set status='released' where id=$1 and order_item_id=$2`, [allocation.id, allocation.order_item_id]);
+      await client.query(`update public.inventory_cartons set status='in_stock' where id=$1 and organization_id=$2`, [allocation.carton_id, order.organization_id]);
       await client.query(`
         insert into public.inventory_carton_events(
           organization_id,carton_id,event_type,from_location_id,order_id,order_item_id,actor_user_id,note,event_data
@@ -297,7 +297,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
               ? "partially_reserved"
               : "unreserved";
 
-      await client.query(`update public.orders set fulfillment_status=$2 where id=$1`, [order.id, nextFulfillment]);
+      await client.query(`update public.orders set fulfillment_status=$2 where id=$1 and organization_id=$3`, [order.id, nextFulfillment, order.organization_id]);
 
       await client.query(`
         insert into public.audit_log(actor_user_id,action,entity_type,entity_id,after_data)

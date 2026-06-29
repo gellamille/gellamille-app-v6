@@ -27,12 +27,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       select st.*, p.name as partner_name
         from public.support_tickets st
         join public.partners p on p.id=st.partner_id
-       where st.id=$1 and st.archived_at is null
-    `, [ticketId]);
-    if (!ticket || ticket.organization_id !== user.organization_id) throw new Error("A ticket nem található.");
-    if (user.role === "partner" && Number(ticket.partner_id) !== Number(user.partner_id)) {
-      throw new Error("Ehhez a tickethez nincs jogosultság.");
-    }
+       where st.id=$1 and st.organization_id=$2
+         and ($3::boolean=false or st.partner_id=$4)
+         and st.archived_at is null
+    `, [ticketId, user.organization_id, user.role === "partner", user.partner_id ?? null]);
+    if (!ticket) throw new Error("A ticket nem található.");
     if (ticket.status === "closed" || ticket.status === "cancelled") {
       throw new Error("Lezárt vagy törölt tickethez már nem írható új üzenet.");
     }

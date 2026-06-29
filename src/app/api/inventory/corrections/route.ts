@@ -22,10 +22,10 @@ export async function POST(request:Request){
    const lotResult=await client.query<any>(`
     select l.*,p.id product_id,p.name product_name from public.lots l
     join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml and p.organization_id=l.organization_id
-    where l.id=$1 and l.archived_at is null for update
-   `,[input.lotId]);
+    where l.id=$1 and l.organization_id=$2 and l.archived_at is null for update
+   `,[input.lotId,user.organization_id]);
    const lot=lotResult.rows[0];
-   if(!lot||lot.organization_id!==user.organization_id)throw new Error("A LOT nem található.");
+   if(!lot)throw new Error("A LOT nem található.");
    if(lot.status!=="active")throw new Error("Csak aktív LOT készlete korrigálható.");
    const loc=await client.query(`select 1 from public.inventory_locations where id=$1 and organization_id=$2 and active`,[input.locationId,user.organization_id]);
    if(!loc.rowCount)throw new Error("A készlethely nem található.");
@@ -36,8 +36,8 @@ export async function POST(request:Request){
     const locationBalance=await client.query<{value:number}>(`
      select coalesce(sum(quantity_units),0)::int value
        from public.inventory_movements
-      where lot_id=$1 and location_id=$2 and archived_at is null
-    `,[lot.id,input.locationId]);
+      where organization_id=$3 and lot_id=$1 and location_id=$2 and archived_at is null
+    `,[lot.id,input.locationId,user.organization_id]);
     const available=Number(locationBalance.rows[0]?.value??0);
     if(available+quantity<0)throw new Error(`Ezen a készlethelyen csak ${available} db van ebből a LOT-ból. Válassz másik készlethelyet, vagy előbb helyezd át a készletet.`);
    }
@@ -46,8 +46,8 @@ export async function POST(request:Request){
      organization_id,product_id,lot_id,location_id,movement_type,quantity_units,unit_cost_huf,reason,created_by
     ) values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *
    `,[user.organization_id,lot.product_id,lot.id,input.locationId,input.movementType,quantity,lot.purchase_unit_price_huf,input.reason.trim(),user.user_id]);
-   const balance=await client.query<{value:number}>(`select coalesce(sum(quantity_units),0)::int value from public.inventory_movements where lot_id=$1 and archived_at is null`,[lot.id]);
-   if(Number(balance.rows[0]?.value??0)===0)await client.query(`update public.lots set status='depleted' where id=$1 and status='active'`,[lot.id]);
+   const balance=await client.query<{value:number}>(`select coalesce(sum(quantity_units),0)::int value from public.inventory_movements where organization_id=$2 and lot_id=$1 and archived_at is null`,[lot.id,user.organization_id]);
+   if(Number(balance.rows[0]?.value??0)===0)await client.query(`update public.lots set status='depleted' where id=$1 and organization_id=$2 and status='active'`,[lot.id,user.organization_id]);
    await client.query(`insert into public.audit_log(actor_user_id,action,entity_type,entity_id,after_data) values($1,'inventory.adjusted','lot',$2,$3::jsonb)`,[user.user_id,String(lot.id),JSON.stringify(movement.rows[0])]);
    return movement.rows[0];
   });

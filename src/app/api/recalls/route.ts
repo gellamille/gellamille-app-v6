@@ -40,12 +40,13 @@ export async function POST(request: Request) {
       for (const lotId of uniqueLotIds) {
         const lotResult = await client.query<any>(`
           select l.*,p.id as product_id,p.name as product_name
-            from public.lots l
-            join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml and p.organization_id=l.organization_id
-           where l.id=$1 for update
-        `, [lotId]);
+           from public.lots l
+           join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml and p.organization_id=l.organization_id
+           where l.id=$1 and l.organization_id=$2
+           for update
+        `, [lotId, user.organization_id]);
         const lot = lotResult.rows[0];
-        if (!lot || lot.organization_id !== user.organization_id) throw new Error(`A LOT nem található: ${lotId}`);
+        if (!lot) throw new Error(`A LOT nem található: ${lotId}`);
         if (["void", "scrapped"].includes(lot.status)) throw new Error(`${lot.lot_number}: sztornózott vagy selejtezett LOT nem hívható vissza.`);
 
         await client.query(`
@@ -58,10 +59,10 @@ export async function POST(request: Request) {
           select im.location_id,loc.code,coalesce(sum(im.quantity_units),0)::int as balance
             from public.inventory_movements im
             join public.inventory_locations loc on loc.id=im.location_id
-           where im.lot_id=$1 and im.archived_at is null and loc.code<>'SCRAP'
+           where im.lot_id=$1 and im.organization_id=$2 and im.archived_at is null and loc.code<>'SCRAP'
            group by im.location_id,loc.code
           having coalesce(sum(im.quantity_units),0)>0
-        `, [lot.id]);
+        `, [lot.id, user.organization_id]);
         for (const balance of balances.rows) {
           await client.query(`
             insert into public.inventory_movements(organization_id,product_id,lot_id,location_id,movement_type,quantity_units,unit_cost_huf,reason,created_by)
@@ -84,9 +85,10 @@ export async function POST(request: Request) {
           join public.orders o on o.id=oi.order_id
           join public.partners p on p.id=o.partner_id
          where a.lot_id = any($1::bigint[]) and a.status='delivered'
+           and o.organization_id=$2
            and o.archived_at is null
          group by p.id,p.name,p.email
-      `, [uniqueLotIds]);
+      `, [uniqueLotIds, user.organization_id]);
       for (const partner of affectedPartners.rows) {
         if (!partner.email) continue;
         await client.query(`

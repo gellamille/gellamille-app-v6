@@ -34,16 +34,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const result = await transaction(async (client) => {
       await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
-      const before = await client.query<any>(`select * from public.shipping_runs where id=$1 and archived_at is null for update`, [runId]);
+      const before = await client.query<any>(`select * from public.shipping_runs where id=$1 and organization_id=$2 and archived_at is null for update`, [runId, user.organization_id]);
       const current = before.rows[0];
-      if (!current || current.organization_id !== user.organization_id) throw new Error("A szállítási járat nem található.");
+      if (!current) throw new Error("A szállítási járat nem található.");
 
       const updated = await client.query<any>(`
         update public.shipping_runs
            set planned_date=$2,status=$3,driver_name=$4,vehicle=$5,note=$6
-         where id=$1
+         where id=$1 and organization_id=$7
          returning *
-      `, [runId, input.plannedDate, input.status, input.driverName.trim(), input.vehicle || null, input.note || null]);
+      `, [runId, input.plannedDate, input.status, input.driverName.trim(), input.vehicle || null, input.note || null, user.organization_id]);
 
       await client.query(`
         update public.deliveries
@@ -99,17 +99,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         for (const orderId of [...new Set(input.addOrderIds)]) {
           const orderResult = await client.query<any>(`
             select id,organization_id,partner_id,delivery_address_id,status,fulfillment_status
-              from public.orders where id=$1 and archived_at is null for update
-          `, [orderId]);
+              from public.orders
+             where id=$1 and organization_id=$2 and archived_at is null
+             for update
+          `, [orderId, user.organization_id]);
           const order = orderResult.rows[0];
-          if (!order || order.organization_id !== user.organization_id) throw new Error(`A rendelés nem található: ${orderId}`);
+          if (!order) throw new Error(`A rendelés nem található: ${orderId}`);
           if (!["approved", "partially_approved"].includes(order.status)) {
             throw new Error("Csak elfogadott rendelés tehető szállítási járatba.");
           }
           if (!["reserved", "partially_reserved", "picking", "packed", "partially_delivered"].includes(order.fulfillment_status)) {
             throw new Error("Csak foglalt vagy összekészített rendelés tehető szállítási járatba.");
           }
-          const delivered = await client.query(`select 1 from public.deliveries where order_id=$1 and status='delivered' and archived_at is null limit 1`, [order.id]);
+          const delivered = await client.query(`select 1 from public.deliveries where order_id=$1 and organization_id=$2 and status='delivered' and archived_at is null limit 1`, [order.id, user.organization_id]);
           if (delivered.rowCount) throw new Error("Már átadott rendelés nem tehető új szállítási járatba.");
 
           const existing = await client.query<any>(`
@@ -124,8 +126,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
               update public.deliveries
                  set shipping_run_id=$2,planned_date=$3,sequence_no=$4,
                      partner_id=$5,address_id=$6,status='planned'
-               where id=$1
-            `, [existing.rows[0].id, runId, input.plannedDate, nextSequence, order.partner_id, order.delivery_address_id]);
+               where id=$1 and organization_id=$7
+            `, [existing.rows[0].id, runId, input.plannedDate, nextSequence, order.partner_id, order.delivery_address_id, user.organization_id]);
           } else {
             await client.query(`
               insert into public.deliveries(

@@ -36,17 +36,19 @@ export async function POST(request: Request) {
       for (const [index, orderId] of input.orderIds.entries()) {
         const orderResult = await client.query<any>(`
           select id,organization_id,partner_id,delivery_address_id,status,fulfillment_status
-            from public.orders where id=$1 and archived_at is null for update
-        `, [orderId]);
+            from public.orders
+           where id=$1 and organization_id=$2 and archived_at is null
+           for update
+        `, [orderId, user.organization_id]);
         const order = orderResult.rows[0];
-        if (!order || order.organization_id !== user.organization_id) throw new Error(`A rendelés nem található: ${orderId}`);
+        if (!order) throw new Error(`A rendelés nem található: ${orderId}`);
         if (!["approved", "partially_approved"].includes(order.status)) {
           throw new Error("Csak elfogadott rendelés tehető szállítási járatba.");
         }
         if (!["reserved", "partially_reserved", "picking", "packed", "partially_delivered"].includes(order.fulfillment_status)) {
           throw new Error("Csak foglalt vagy összekészített rendelés tehető szállítási járatba.");
         }
-        const delivered = await client.query(`select 1 from public.deliveries where order_id=$1 and status='delivered' and archived_at is null limit 1`, [order.id]);
+        const delivered = await client.query(`select 1 from public.deliveries where order_id=$1 and organization_id=$2 and status='delivered' and archived_at is null limit 1`, [order.id, user.organization_id]);
         if (delivered.rowCount) throw new Error("Már átadott rendelés nem tehető új szállítási járatba.");
 
         const existing = await client.query<any>(`
@@ -61,9 +63,9 @@ export async function POST(request: Request) {
               update public.deliveries
                  set shipping_run_id=$2,planned_date=$3,sequence_no=$4,
                      partner_id=$5,address_id=$6,status='planned'
-               where id=$1
+               where id=$1 and organization_id=$7
                returning *
-            `, [existing.rows[0].id, run.id, input.plannedDate, index + 1, order.partner_id, order.delivery_address_id])
+            `, [existing.rows[0].id, run.id, input.plannedDate, index + 1, order.partner_id, order.delivery_address_id, user.organization_id])
           : await client.query<any>(`
               insert into public.deliveries(
                 organization_id,shipping_run_id,order_id,partner_id,address_id,planned_date,sequence_no,status,created_by
