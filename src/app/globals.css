@@ -405,9 +405,10 @@ textarea { min-height: 95px; resize: vertical; }
 .partner-name { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .partner-line { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .partner-meta { margin-top: 3px; color: var(--muted); font-size: 11px; line-height: 1.2; overflow-wrap: anywhere; }
-.partner-actions { display: grid; grid-template-columns: repeat(2, minmax(76px, 1fr)); gap: 6px; width: 174px; }
+.partner-actions { display: grid; grid-template-columns: minmax(82px, 1fr) minmax(74px, 1fr) 34px; gap: 6px; width: 210px; }
 .partner-actions .button { min-height: 32px; padding: 6px 8px; white-space: nowrap; }
-.partner-actions .button-danger { grid-column: 1 / -1; }
+.partner-delete-button { color: var(--danger); border-color: #e7c2bd; padding: 6px; }
+.partner-delete-button:hover { background: #f9e7e5; border-color: #d6928a; }
 .icon-close-button { border: 0; background: transparent; color: var(--muted); font-size: 24px; line-height: 1; padding: 2px 6px; border-radius: 8px; }
 .icon-close-button:hover { background: #f0f2ee; color: var(--ink); }
 .modal-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(31,42,37,.42); display: grid; place-items: center; padding: 22px; }

@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { dateHU, money } from "@/lib/format";
 import { huLabel, paymentMethodLabels } from "@/lib/status";
@@ -218,7 +219,7 @@ export function PartnerDirectory({
             <div className="partner-meta">Követelés: {money(p.outstanding)}</div>
           </td>
           <td><StatusBadge value={p.active ? "active" : "cancelled"} label={p.active ? "Aktív" : "Inaktív"} /></td>
-          {hasActions ? <td><div className="partner-actions">{canWrite ? <button className="button button-small" type="button" onClick={() => setEditing(p)}>Szerkesztés</button> : null}{canWrite ? <button className="button button-small" type="button" disabled={loading} onClick={() => resetPassword(p)}>Új jelszó</button> : null}{canDelete ? <button className="button button-small button-danger" type="button" onClick={() => setDeleting(p)}>Törlés</button> : null}</div></td> : null}
+          {hasActions ? <td><div className="partner-actions">{canWrite ? <button className="button button-small" type="button" onClick={() => setEditing(p)}>Szerkesztés</button> : null}{canWrite ? <button className="button button-small" type="button" disabled={loading} onClick={() => resetPassword(p)}>Új jelszó</button> : null}{canDelete ? <button className="button button-small partner-delete-button" type="button" onClick={() => setDeleting(p)} aria-label={`${p.name} törlése`} title="Törlés"><Trash2 size={16} /></button> : null}</div></td> : null}
         </tr>)}
         {!filtered.length ? <tr><td colSpan={hasActions ? 6 : 5}>Nincs a szűrésnek megfelelő partner.</td></tr> : null}
       </tbody></table></div>
