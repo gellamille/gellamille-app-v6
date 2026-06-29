@@ -57,6 +57,15 @@ function digitsOnly(value: string, maxLength?: number) {
   return typeof maxLength === "number" ? digits.slice(0, maxLength) : digits;
 }
 
+function overduePolicyLabel(value: string) {
+  return value === "block" ? "Blokkolás" : "Figyelmeztetés";
+}
+
+function paymentSummary(partner: PartnerRow) {
+  const method = huLabel(paymentMethodLabels, partner.default_payment_method);
+  return partner.default_payment_method === "bank_transfer" ? `${method} · ${partner.payment_terms_days} nap` : method;
+}
+
 export function PartnerDirectory({
   partners,
   canWrite,
@@ -187,9 +196,31 @@ export function PartnerDirectory({
           <option value="inactive">Inaktív</option>
         </select></label>
       </div>
-      <div className="table-wrap"><table><thead><tr><th>Partner</th><th>Kapcsolat</th><th>Belépés</th><th>Szállítás</th><th>Fizetés</th><th>Minimum</th><th>Hitelkeret</th><th>Lejárt kezelés</th><th>Utolsó rendelés</th><th>Forgalom</th><th>Követelés</th><th>Állapot</th>{hasActions ? <th>Művelet</th> : null}</tr></thead><tbody>
-        {filtered.map(p => <tr key={p.id}><td><strong>{p.name}</strong></td><td>{p.email ?? "—"}<div>{p.phone ?? ""}</div></td><td><div>{p.login_email ?? p.email ?? "—"}</div>{p.password_change_required && p.temporary_password_plain ? <div className="temporary-password-inline"><span className="mono">{p.temporary_password_plain}</span><small>Lejár: {dateHU(p.temporary_password_expires_at)}</small></div> : <small className="text-muted">{p.password_changed_at ? `Saját jelszó: ${dateHU(p.password_changed_at)}` : "Nincs aktív ideiglenes jelszó"}</small>}</td><td>{p.delivery_days ?? "—"}</td><td>{huLabel(paymentMethodLabels, p.default_payment_method)} · {p.payment_terms_days} nap</td><td>{p.minimum_order_cartons} karton</td><td>{money(p.credit_limit_huf)}</td><td>{p.overdue_policy === "block" ? "Blokkolás" : "Figyelmeztetés"}</td><td>{dateHU(p.last_order_at)}</td><td>{money(p.total_revenue)}</td><td>{money(p.outstanding)}</td><td><StatusBadge value={p.active ? "active" : "cancelled"} label={p.active ? "Aktív" : "Inaktív"} /></td>{hasActions ? <td><div className="inline">{canWrite ? <button className="button button-small" type="button" onClick={() => setEditing(p)}>Szerkesztés</button> : null}{canWrite ? <button className="button button-small" type="button" disabled={loading} onClick={() => resetPassword(p)}>Új jelszó</button> : null}{canDelete ? <button className="button button-small button-danger" type="button" onClick={() => setDeleting(p)}>Törlés</button> : null}</div></td> : null}</tr>)}
-        {!filtered.length ? <tr><td colSpan={hasActions ? 13 : 12}>Nincs a szűrésnek megfelelő partner.</td></tr> : null}
+      <div className="table-wrap partner-table-wrap"><table className="partner-table"><thead><tr><th>Partner</th><th>Szállítás és fizetés</th><th>Keretek</th><th>Rendelés és pénzügy</th><th>Állapot</th>{hasActions ? <th>Művelet</th> : null}</tr></thead><tbody>
+        {filtered.map(p => <tr key={p.id}>
+          <td>
+            <strong className="partner-name">{p.name}</strong>
+            <div className="partner-meta">{p.email ?? "—"}</div>
+            <div className="partner-meta">{p.phone ?? "—"}</div>
+          </td>
+          <td>
+            <div className="partner-line">{p.delivery_days ?? "Nincs nap"}</div>
+            <div className="partner-meta">{paymentSummary(p)}</div>
+          </td>
+          <td>
+            <div><strong>{p.minimum_order_cartons}</strong> karton minimum</div>
+            <div className="partner-meta">{money(p.credit_limit_huf)} hitelkeret</div>
+            <div className="partner-meta">{overduePolicyLabel(p.overdue_policy)}</div>
+          </td>
+          <td>
+            <div>Utolsó: <strong>{dateHU(p.last_order_at)}</strong></div>
+            <div className="partner-meta">Forgalom: {money(p.total_revenue)}</div>
+            <div className="partner-meta">Követelés: {money(p.outstanding)}</div>
+          </td>
+          <td><StatusBadge value={p.active ? "active" : "cancelled"} label={p.active ? "Aktív" : "Inaktív"} /></td>
+          {hasActions ? <td><div className="partner-actions">{canWrite ? <button className="button button-small" type="button" onClick={() => setEditing(p)}>Szerkesztés</button> : null}{canWrite ? <button className="button button-small" type="button" disabled={loading} onClick={() => resetPassword(p)}>Új jelszó</button> : null}{canDelete ? <button className="button button-small button-danger" type="button" onClick={() => setDeleting(p)}>Törlés</button> : null}</div></td> : null}
+        </tr>)}
+        {!filtered.length ? <tr><td colSpan={hasActions ? 6 : 5}>Nincs a szűrésnek megfelelő partner.</td></tr> : null}
       </tbody></table></div>
 
       {editing ? <EditPartnerModal partner={editing} loading={loading} onClose={() => setEditing(null)} onSubmit={submitEdit} /> : null}
