@@ -35,6 +35,31 @@ export default async function RecallsPage({ searchParams }: { searchParams?: Pro
      order by l.production_date desc,l.id desc
      limit 400
   `, [user.organization_id]);
+  const lotIds = lots.map((lot) => Number(lot.id));
+  const recallDestinations = lotIds.length ? await query<any>(`
+    select
+      a.lot_id,
+      p.name as partner_name,
+      p.email as partner_email,
+      o.order_number,
+      coalesce(d.delivered_at,a.delivered_at) as delivered_at,
+      concat_ws(', ',pa.postal_code,pa.city,pa.address_line1) as delivery_address,
+      coalesce(sum(a.quantity_units),0)::int as quantity_units
+      from public.order_item_lot_allocations a
+      join public.lots l on l.id=a.lot_id
+      join public.order_items oi on oi.id=a.order_item_id
+      join public.orders o on o.id=oi.order_id
+      join public.partners p on p.id=o.partner_id
+      left join public.delivery_items di on di.order_item_id=oi.id
+      left join public.deliveries d on d.id=di.delivery_id and d.status='delivered' and d.archived_at is null
+      left join public.partner_addresses pa on pa.id=coalesce(d.address_id,o.delivery_address_id)
+     where a.lot_id=any($1::bigint[])
+       and a.status='delivered'
+       and l.organization_id=$2
+       and o.archived_at is null
+     group by a.lot_id,p.name,p.email,o.order_number,coalesce(d.delivered_at,a.delivered_at),concat_ws(', ',pa.postal_code,pa.city,pa.address_line1)
+     order by p.name,o.order_number
+  `, [lotIds, user.organization_id]) : [];
   const recalls = await query<any>(`
     select r.*,count(rl.lot_id)::int as lot_count
       from public.product_recalls r
@@ -58,7 +83,7 @@ export default async function RecallsPage({ searchParams }: { searchParams?: Pro
   return (
     <div className="page">
       <PageHeader title="Visszahívás" description="LOT szám alapján indított visszahívás. A rendszer értesítést és e-mail sort készít az érintett partnereknek." />
-      {["admin", "management", "warehouse", "production"].includes(user.role) ? <RecallForm lots={lots} preselectedLotIds={preselectedLots.map((row) => Number(row.id))} /> : null}
+      {["admin", "management", "warehouse", "production"].includes(user.role) ? <RecallForm lots={lots} preselectedLotIds={preselectedLots.map((row) => Number(row.id))} recallDestinations={recallDestinations} /> : null}
       <section className="grid grid-2 section-gap">
         <div>
           <h2>Visszahívások</h2>
