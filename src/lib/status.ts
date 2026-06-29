@@ -114,6 +114,20 @@ export const taskSourceLabels: Record<string, string> = {
   system: "Rendszer"
 };
 
+export const supportTicketStatusLabels: Record<string, string> = {
+  open: "Nyitott",
+  in_progress: "Folyamatban",
+  waiting_partner: "Partner válaszára vár",
+  closed: "Lezárva",
+  cancelled: "Törölve"
+};
+
+export const supportTicketPriorityLabels: Record<string, string> = {
+  normal: "Normál",
+  high: "Fontos",
+  urgent: "Sürgős"
+};
+
 export const expenseStatusLabels: Record<string, string> = {
   unpaid: "Kifizetetlen",
   paid: "Kifizetett"

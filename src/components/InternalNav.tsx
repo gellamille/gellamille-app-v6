@@ -7,7 +7,7 @@ import {
   Boxes, ClipboardList, Factory, LayoutDashboard, Truck,
   WalletCards, Users, ListTodo, FlaskConical, ChartNoAxesCombined,
   Settings, LogOut, IceCreamBowl, AlertTriangle, ScanBarcode, ArrowRightLeft,
-  BriefcaseBusiness, Warehouse, Store, ShieldCheck, FileText
+  BriefcaseBusiness, Warehouse, Store, ShieldCheck, FileText, LifeBuoy
 } from "lucide-react";
 
 const navGroups = [
@@ -19,6 +19,7 @@ const navGroups = [
       ["/internal/orders", "Rendelések", ClipboardList, ["admin","management","staff","sales","warehouse","finance"]],
       ["/internal/shipments", "Szállítás", Truck, ["admin","management","staff","warehouse","sales"]],
       ["/internal/production", "Gyártás és LOT", Factory, ["admin","management","staff","production"]],
+      ["/internal/support", "Ügyfélszolgálat", LifeBuoy, ["admin","management","staff","sales","finance"]],
       ["/internal/tasks", "Feladatok", ListTodo, ["admin","management","staff","sales","production"]]
     ]
   },
@@ -55,7 +56,7 @@ const navGroups = [
   }
 ] as const;
 
-export function InternalNav({ role, submittedOrders = 0 }: { role: string; submittedOrders?: number }) {
+export function InternalNav({ role, submittedOrders = 0, openSupportTickets = 0 }: { role: string; submittedOrders?: number; openSupportTickets?: number }) {
   const pathname = usePathname();
   const groups = navGroups
     .map((group) => ({
@@ -85,7 +86,7 @@ export function InternalNav({ role, submittedOrders = 0 }: { role: string; submi
                 const isActive = exact || (nested && !hasMoreSpecificMatch);
                 return (
                   <Link className={isActive ? "is-active" : undefined} href={href} key={href} aria-current={isActive ? "page" : undefined}>
-                    <Icon size={17} /><span>{label}</span>{href === "/internal/orders" && submittedOrders > 0 ? <span className="nav-badge">{submittedOrders}</span> : null}
+                    <Icon size={17} /><span>{label}</span>{href === "/internal/orders" && submittedOrders > 0 ? <span className="nav-badge">{submittedOrders}</span> : null}{href === "/internal/support" && openSupportTickets > 0 ? <span className="nav-badge">{openSupportTickets}</span> : null}
                   </Link>
                 );
               })}

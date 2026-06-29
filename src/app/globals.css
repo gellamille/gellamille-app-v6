@@ -212,10 +212,10 @@ textarea { min-height: 95px; resize: vertical; }
   background: #edf0ee;
   color: #54625a;
 }
-.badge-approved, .badge-reserved, .badge-delivered, .badge-paid, .badge-active, .badge-available, .badge-issued, .badge-configured { background: #e4f1e8; color: #2d704a; }
-.badge-submitted, .badge-receivable, .badge-picking, .badge-packed, .badge-picked, .badge-ready, .badge-queued, .badge-sent { background: #e5eef7; color: #365f87; }
+.badge-approved, .badge-reserved, .badge-delivered, .badge-paid, .badge-active, .badge-available, .badge-issued, .badge-configured, .badge-open { background: #e4f1e8; color: #2d704a; }
+.badge-submitted, .badge-receivable, .badge-picking, .badge-packed, .badge-picked, .badge-ready, .badge-queued, .badge-sent, .badge-in_progress { background: #e5eef7; color: #365f87; }
 .badge-overdue, .badge-rejected, .badge-cancelled, .badge-void, .badge-recalled, .badge-scrapped, .badge-stock_critical, .badge-failed, .badge-error, .badge-disabled { background: #f8e5e3; color: #9d3a32; }
-.badge-partially_approved, .badge-partially_reserved, .badge-partially_delivered, .badge-partially_paid, .badge-quarantine, .badge-expired, .badge-stock_low { background: #f7edda; color: #8b611f; }
+.badge-partially_approved, .badge-partially_reserved, .badge-partially_delivered, .badge-partially_paid, .badge-quarantine, .badge-expired, .badge-stock_low, .badge-waiting_partner { background: #f7edda; color: #8b611f; }
 .badge-created, .badge-in_stock, .badge-returned, .badge-draft, .badge-unknown, .badge-unpaid, .badge-not_configured { background: #e4f1e8; color: #2d704a; }
 .badge-archived { background: #ecefed; color: #64706a; }
 .badge-stock_medium { background: #e8eef7; color: #365f87; }
@@ -473,6 +473,43 @@ textarea { min-height: 95px; resize: vertical; }
   font-size: 12px;
   line-height: 1.35;
 }
+.support-ticket-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.support-ticket-summary div { display: grid; gap: 5px; min-width: 0; }
+.support-ticket-summary span { color: var(--muted); font-size: 11px; font-weight: 850; text-transform: uppercase; letter-spacing: .04em; }
+.support-ticket-summary strong { overflow-wrap: anywhere; }
+.support-ticket-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0 18px; }
+.support-conversation { display: grid; gap: 14px; }
+.support-message-list {
+  background: #f8f9f6;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+.support-message {
+  width: min(720px, 88%);
+  background: white;
+  border: 1px solid #e1e6e1;
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 8px 22px rgba(31,42,37,.06);
+}
+.support-message.is-mine {
+  justify-self: end;
+  background: #eaf2ed;
+  border-color: #cfe1d5;
+}
+.support-message-meta { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; margin-bottom: 7px; }
+.support-message-meta strong { color: var(--ink); }
+.support-message p { margin: 0; white-space: pre-wrap; line-height: 1.45; }
+.support-reply-form { display: grid; gap: 10px; }
+.support-reply-form textarea { min-height: 120px; }
 .product-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .product-card { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); overflow: hidden; }
 .product-image-frame { position: relative; aspect-ratio: 1 / 1; margin: -18px -18px 16px; background: #f7f5e9; border-bottom: 1px solid var(--line); overflow: hidden; }
@@ -569,6 +606,7 @@ textarea { min-height: 95px; resize: vertical; }
   .partner-nav nav { justify-content: flex-start; }
   .partner-hero-main { display: grid; }
   .partner-hero-stats { grid-template-columns: 1fr; }
+  .support-message { width: 100%; }
 }
 
 .metric-success { border-left: 4px solid var(--success); }
