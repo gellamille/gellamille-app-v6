@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/PageHeader";
 import { requireAppUser } from "@/lib/auth";
 import { one, query } from "@/lib/db";
 import { dateHU, money } from "@/lib/format";
@@ -44,24 +43,28 @@ export default async function PartnerDashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Partneri rendelő" description={partner?.name ?? "Rendelés kartonban, a jóváhagyott szállítási napokra."} actions={<Link href="/partner/cart" className="button button-primary">Kosár megnyitása</Link>} />
-      {blocked ? <div className="alert alert-danger section-gap">A rendelésleadás lejárt tartozás miatt blokkolva van. A kosár használható, de beküldeni most nem lehet.</div> : null}
-      <section className="grid grid-3">
-        <div className="card metric"><div className="metric-label">Nyitott követelés</div><div className="metric-value">{money(partner?.outstanding)}</div></div>
-        <div className="card metric"><div className="metric-label">Minimum rendelés</div><div className="metric-value">{partner?.minimum_order_cartons ?? 5} karton</div></div>
-        <div className="card metric"><div className="metric-label">Fizetési határidő</div><div className="metric-value">{partner?.payment_terms_days ?? 0} nap</div></div>
-      </section>
-      <section className="section-gap card">
-        <h2>Céges adatok</h2>
-        <dl className="kv">
-          <dt>Számlázási név</dt><dd>{partner?.billing_name ?? partner?.name ?? "—"}</dd>
+      <section className="partner-dashboard-hero">
+        <div className="partner-hero-main">
+          <div>
+            <h1>Partneri rendelő</h1>
+            <p>{partner?.name ?? "Rendelés kartonban, a jóváhagyott szállítási napokra."}</p>
+          </div>
+          <Link href="/partner/cart" className="button button-primary">Kosár megnyitása</Link>
+        </div>
+        <div className="partner-hero-stats">
+          <div><span>Nyitott követelés</span><strong>{money(partner?.outstanding)}</strong></div>
+          <div><span>Minimum rendelés</span><strong>{partner?.minimum_order_cartons ?? 5} karton</strong></div>
+          <div><span>Fizetés</span><strong>{huLabel(paymentMethodLabels, partner?.default_payment_method)}{partner?.default_payment_method === "bank_transfer" ? ` · ${partner?.payment_terms_days ?? 0} nap` : ""}</strong></div>
+          <div><span>Szállítási nap</span><strong>{partner?.delivery_days ?? "—"}</strong></div>
+        </div>
+        <dl className="partner-hero-details">
+          <dt>Számlázás</dt><dd>{partner?.billing_name ?? partner?.name ?? "—"}</dd>
           <dt>Adószám</dt><dd>{partner?.tax_number ?? "—"}</dd>
-          <dt>Kapcsolat</dt><dd>{partner?.email ?? "—"} {partner?.phone ? `· ${partner.phone}` : ""}</dd>
+          <dt>Kapcsolat</dt><dd>{partner?.email ?? "—"}{partner?.phone ? ` · ${partner.phone}` : ""}</dd>
           <dt>Szállítási cím</dt><dd>{partner?.shipping_address ?? "—"}</dd>
-          <dt>Szállítási nap</dt><dd>{partner?.delivery_days ?? "—"}</dd>
-          <dt>Fizetési mód</dt><dd>{huLabel(paymentMethodLabels, partner?.default_payment_method)}</dd>
         </dl>
       </section>
+      {blocked ? <div className="alert alert-danger section-gap">A rendelésleadás lejárt tartozás miatt blokkolva van. A kosár használható, de beküldeni most nem lehet.</div> : null}
       <section className="section-gap">
         <div className="card-title-row"><h2>Termékek</h2><Link href="/partner/catalog" className="button button-small">Katalógus oldal</Link></div>
         <Catalog products={products} />

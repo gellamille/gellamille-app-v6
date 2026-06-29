@@ -54,6 +54,10 @@ function deliveryDateOptions(deliveryDays: any[]) {
   return options;
 }
 
+function notifyCartUpdated() {
+  window.dispatchEvent(new Event("gellamille-cart-updated"));
+}
+
 export function CartCheckout({ products, addresses, deliveryDays, minimum, defaultPayment, blockedReason }: any) {
   const router = useRouter();
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -98,6 +102,7 @@ export function CartCheckout({ products, addresses, deliveryDays, minimum, defau
     }
     const next = {...cart,[id]:cartons};
     setCart(next); localStorage.setItem("gellamille-cart",JSON.stringify(next));
+    notifyCartUpdated();
   }
 
   async function submit() {
@@ -135,6 +140,7 @@ export function CartCheckout({ products, addresses, deliveryDays, minimum, defau
       return setError(validationError ? "A kosár adatai hibásak. Frissítsd az oldalt, majd próbáld újra." : data.error??"A rendelés beküldése sikertelen.");
     }
     localStorage.removeItem("gellamille-cart");
+    notifyCartUpdated();
     router.push(`/partner/orders/${data.id}`); router.refresh();
   }
 

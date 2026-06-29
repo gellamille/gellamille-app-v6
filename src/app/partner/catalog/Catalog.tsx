@@ -34,13 +34,32 @@ function imageForProduct(product: any): ProductImage | null {
   return match ? { src: match.src, alt: match.alt } : null;
 }
 
+function notifyCartUpdated() {
+  window.dispatchEvent(new Event("gellamille-cart-updated"));
+}
+
 export function Catalog({ products }: { products: any[] }) {
   const [cart, setCart] = useState<Cart>({});
   const [saved, setSaved] = useState("");
   const groups = [
-    { title: "150 ml kiszerelés", items: products.filter((product) => Number(product.size_ml) === 150) },
-    { title: "300 ml kiszerelés", items: products.filter((product) => Number(product.size_ml) === 300) },
-    { title: "Egyéb kiszerelés", items: products.filter((product) => ![150, 300].includes(Number(product.size_ml))) }
+    {
+      title: "150 ml termékek",
+      description: "Kisebb poharas kiszerelés, jellemzően nagyobb kartonmennyiséggel.",
+      tone: "small",
+      items: products.filter((product) => Number(product.size_ml) === 150)
+    },
+    {
+      title: "300 ml termékek",
+      description: "Nagyobb poharas kiszerelés, külön rendelési blokkban kezelve.",
+      tone: "large",
+      items: products.filter((product) => Number(product.size_ml) === 300)
+    },
+    {
+      title: "Egyéb kiszerelés",
+      description: "Minden olyan termék, amely nem 150 ml vagy 300 ml.",
+      tone: "other",
+      items: products.filter((product) => ![150, 300].includes(Number(product.size_ml)))
+    }
   ].filter((group) => group.items.length > 0);
 
   useEffect(() => {
@@ -70,6 +89,7 @@ export function Catalog({ products }: { products: any[] }) {
     const next = { ...cart, [productId]: (cart[String(productId)] ?? 0) + cartons };
     setCart(next);
     localStorage.setItem("gellamille-cart", JSON.stringify(next));
+    notifyCartUpdated();
     setSaved("Kosár frissítve.");
     setTimeout(() => setSaved(""), 1500);
   }
@@ -83,14 +103,23 @@ export function Catalog({ products }: { products: any[] }) {
           <Link href="/partner/cart" className="button button-primary">Rendelés véglegesítése</Link>
         </div>
       ) : null}
-      {groups.map((group) => (
-        <section className="section-gap" key={group.title}>
-          <h2>{group.title}</h2>
-          <div className="product-grid section-gap-small">
+      <div className="catalog-size-sections">
+        {groups.map((group) => (
+          <section className={`catalog-size-section catalog-size-section-${group.tone}`} key={group.title}>
+            <div className="catalog-size-header">
+              <div>
+                <span className="catalog-size-kicker">{group.title.includes("150") ? "150 ml" : group.title.includes("300") ? "300 ml" : "Egyéb"}</span>
+                <h2>{group.title}</h2>
+                <p>{group.description}</p>
+              </div>
+              <strong>{group.items.length} termék</strong>
+            </div>
+            <div className="product-grid section-gap-small">
             {group.items.map(p => <Product key={p.id} product={p} add={add} />)}
-          </div>
-        </section>
-      ))}
+            </div>
+          </section>
+        ))}
+      </div>
     </>
   );
 }
