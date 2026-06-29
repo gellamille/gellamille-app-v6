@@ -101,6 +101,12 @@ export const taskPriorityLabels: Record<string, string> = {
 
 export const taskSourceLabels: Record<string, string> = {
   manual: "Kézi",
+  low_stock: "Kritikus készlet",
+  expiry: "Lejáratfigyelés",
+  overdue: "Lejárt tartozás",
+  inactive_partner: "Inaktív partner",
+  failed_delivery: "Sikertelen szállítás",
+  partner_followup: "Partner utánkövetés",
   order: "Rendelés",
   shipment: "Szállítás",
   inventory: "Készlet",

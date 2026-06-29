@@ -9,6 +9,58 @@ export async function GET(request: Request) {
   }
   const result = await transaction(async (client) => {
     const maintenance = await client.query<{ result: unknown }>(`select public.run_daily_inventory_maintenance() as result`);
+    const lowStockTasks = await client.query<{ created_tasks: number }>(`
+      with production_assignee as (
+        select organization_id,user_id
+          from public.app_users
+         where active=true
+           and role='production'
+      ),
+      critical_products as (
+        select p.organization_id,s.product_id,s.product_name,s.available_units,s.minimum_stock_units,
+               greatest(s.minimum_stock_units-s.available_units,0)::int as missing_units
+          from public.v_product_stock_summary s
+          join public.products p on p.id=s.product_id
+         where p.active=true
+           and p.archived_at is null
+           and s.minimum_stock_units>0
+           and s.available_units<s.minimum_stock_units
+           and not exists (
+             select 1
+               from public.tasks t
+              where t.product_id=s.product_id
+                and t.source='low_stock'
+                and t.status in ('open','in_progress')
+                and t.archived_at is null
+           )
+      ),
+      inserted as (
+        insert into public.tasks(
+          organization_id,title,description,product_id,assigned_to,due_at,priority,source
+        )
+        select
+          organization_id,
+          'Készletfeltöltés szükséges: '||product_name,
+          product_name||' kritikus készleten van. Elérhető: '||available_units||' db, minimum: '||minimum_stock_units||' db, hiány: '||missing_units||' db.',
+          product_id,
+          (select user_id from production_assignee pa where pa.organization_id=critical_products.organization_id order by user_id limit 1),
+          (current_date + interval '1 day')::timestamptz,
+          'urgent',
+          'low_stock'
+        from critical_products
+        returning id,organization_id,title,description,product_id,assigned_to
+      ),
+      notifications as (
+        insert into public.notifications(organization_id,user_id,role_code,type,title,body,entity_type,entity_id)
+        select organization_id,assigned_to,
+               case when assigned_to is null then 'production' else null end,
+               'task.low_stock',title,description,'task',id::text
+          from inserted
+        returning id
+      )
+      select (select count(*)::int from inserted) as created_tasks,
+             (select count(*)::int from notifications) as queued_notifications
+    `);
     await client.query(`
       update public.receivables r set status=case
         when v.outstanding_huf<=0 then 'paid'
@@ -26,7 +78,10 @@ export async function GET(request: Request) {
         else 'receivable' end
       where o.status in ('closed','approved','partially_approved') and o.archived_at is null
     `);
-    return maintenance.rows[0]?.result;
+    return {
+      maintenance: maintenance.rows[0]?.result,
+      low_stock_tasks: lowStockTasks.rows[0]?.created_tasks ?? 0
+    };
   });
   const emailResult = await processEmailOutbox(20).catch((error) => ({ enabled: true, processed: [], error: error instanceof Error ? error.message : "E-mail hiba" }));
   const queued = await one<{ count: string }>(`select count(*)::text count from public.email_outbox where status='queued' and archived_at is null`);

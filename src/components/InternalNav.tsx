@@ -19,7 +19,7 @@ const navGroups = [
       ["/internal/orders", "Rendelések", ClipboardList, ["admin","management","staff","sales","warehouse","finance"]],
       ["/internal/shipments", "Szállítás", Truck, ["admin","management","staff","warehouse","sales"]],
       ["/internal/production", "Gyártás és LOT", Factory, ["admin","management","staff","production"]],
-      ["/internal/tasks", "Feladatok", ListTodo, ["admin","management","staff","sales"]]
+      ["/internal/tasks", "Feladatok", ListTodo, ["admin","management","staff","sales","production"]]
     ]
   },
   {

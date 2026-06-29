@@ -7,7 +7,7 @@ import { query } from "@/lib/db";
 const schema = z.object({ status: z.enum(["open", "in_progress", "done", "cancelled"]) });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser(["admin", "management", "sales"]);
+  const auth = await apiUser(["admin", "management", "sales", "production"]);
   if (auth.error || !auth.user) return auth.error ?? NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
   const user = auth.user;
   try {
