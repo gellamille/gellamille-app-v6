@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Product = {
@@ -48,6 +48,12 @@ function draftFromProduct(product: Product): Draft {
   };
 }
 
+function numberFromInput(value: string, fallback: number) {
+  if (value.trim() === "") return fallback;
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
 export function ProductEditor({ products, canWrite }: { products: Product[]; canWrite: boolean }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -56,6 +62,17 @@ export function ProductEditor({ products, canWrite }: { products: Product[]; can
   const [drafts, setDrafts] = useState<Record<number, Draft>>(() => Object.fromEntries(products.map((product) => [product.id, draftFromProduct(product)])));
   const dirtyCount = dirtyIds.size;
   const savingAll = useMemo(() => dirtyCount > 0 && [...dirtyIds].every((id) => loadingIds.has(id)), [dirtyCount, dirtyIds, loadingIds]);
+
+  useEffect(() => {
+    setDrafts((current) => {
+      const productDrafts = Object.fromEntries(products.map((product) => [product.id, draftFromProduct(product)]));
+      const merged = { ...productDrafts };
+      for (const id of dirtyIds) {
+        if (current[id]) merged[id] = current[id];
+      }
+      return merged;
+    });
+  }, [products, dirtyIds]);
 
   function updateDraft(productId: number, patch: Partial<Draft>) {
     setDrafts((current) => ({ ...current, [productId]: { ...current[productId], ...patch } }));
@@ -78,6 +95,7 @@ export function ProductEditor({ products, canWrite }: { products: Product[]; can
       return next;
     });
     if (!response.ok) throw new Error(data.error ?? "A termék mentése sikertelen.");
+    setDrafts((current) => ({ ...current, [productId]: draftFromProduct(data) }));
     setDirtyIds((current) => {
       const next = new Set(current);
       next.delete(productId);
@@ -126,10 +144,10 @@ export function ProductEditor({ products, canWrite }: { products: Product[]; can
               <td className="mono">{product.sku ?? `GM-${product.flavor_code}-${product.size_ml}`}</td>
               <td>{canWrite ? <input value={draft.name} onChange={(event) => updateDraft(product.id, { name: event.target.value })} required /> : draft.name}</td>
               <td>{product.size_ml} ml</td>
-              <td>{canWrite ? <input type="number" min="1" value={draft.unitsPerCarton} onChange={(event) => updateDraft(product.id, { unitsPerCarton: Number(event.target.value) })} required /> : `${draft.unitsPerCarton} db`}</td>
-              <td>{canWrite ? <input type="number" min="1" value={draft.netUnitPriceHuf} onChange={(event) => updateDraft(product.id, { netUnitPriceHuf: Number(event.target.value) })} required /> : draft.netUnitPriceHuf}</td>
-              <td>{canWrite ? <input type="number" min="0" value={draft.purchaseUnitPriceHuf} onChange={(event) => updateDraft(product.id, { purchaseUnitPriceHuf: Number(event.target.value) })} required /> : draft.purchaseUnitPriceHuf}</td>
-              <td>{canWrite ? <input type="number" min="0" value={draft.minimumStockUnits} onChange={(event) => updateDraft(product.id, { minimumStockUnits: Number(event.target.value) })} required /> : draft.minimumStockUnits}</td>
+              <td>{canWrite ? <input type="number" min="1" value={draft.unitsPerCarton} onChange={(event) => updateDraft(product.id, { unitsPerCarton: numberFromInput(event.target.value, draft.unitsPerCarton) })} required /> : `${draft.unitsPerCarton} db`}</td>
+              <td>{canWrite ? <input type="number" min="1" value={draft.netUnitPriceHuf} onChange={(event) => updateDraft(product.id, { netUnitPriceHuf: numberFromInput(event.target.value, draft.netUnitPriceHuf) })} required /> : draft.netUnitPriceHuf}</td>
+              <td>{canWrite ? <input type="number" min="0" value={draft.purchaseUnitPriceHuf} onChange={(event) => updateDraft(product.id, { purchaseUnitPriceHuf: numberFromInput(event.target.value, draft.purchaseUnitPriceHuf) })} required /> : draft.purchaseUnitPriceHuf}</td>
+              <td>{canWrite ? <input type="number" min="0" value={draft.minimumStockUnits} onChange={(event) => updateDraft(product.id, { minimumStockUnits: numberFromInput(event.target.value, draft.minimumStockUnits) })} required /> : draft.minimumStockUnits}</td>
               <td>{canWrite ? <select value={draft.status} onChange={(event) => updateDraft(product.id, { status: event.target.value })}>{statuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : draft.status}</td>
               <td>{canWrite ? <input type="checkbox" checked={draft.active} onChange={(event) => updateDraft(product.id, { active: event.target.checked })} /> : draft.active ? "Igen" : "Nem"}</td>
               <td>{canWrite ? <button className="button button-small" disabled={!dirty || loading} onClick={() => saveOne(product.id)}>{loading ? "Mentés..." : "Mentés"}</button> : "—"}</td>

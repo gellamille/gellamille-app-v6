@@ -6,10 +6,10 @@ import { transaction } from "@/lib/db";
 
 const schema = z.object({
   name: z.string().min(2).max(250),
-  unitsPerCarton: z.number().int().min(1).max(999),
-  netUnitPriceHuf: z.number().int().positive(),
-  purchaseUnitPriceHuf: z.number().int().min(0),
-  minimumStockUnits: z.number().int().min(0),
+  unitsPerCarton: z.coerce.number().int().min(1).max(999),
+  netUnitPriceHuf: z.coerce.number().int().positive(),
+  purchaseUnitPriceHuf: z.coerce.number().int().min(0),
+  minimumStockUnits: z.coerce.number().int().min(0),
   status: z.enum(["active", "temporarily_unavailable", "seasonal", "phasing_out", "discontinued"]),
   active: z.boolean().default(true)
 });
@@ -29,7 +29,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
       const before = await client.query<any>(`select * from public.products where id=$1 for update`, [productId]);
       const product = before.rows[0];
-      if (!product || product.organization_id !== user.organization_id) throw new Error("A termék nem található.");
+      if (!product || Number(product.organization_id) !== Number(user.organization_id)) throw new Error("A termék nem található.");
 
       const updated = await client.query(`
         update public.products set
