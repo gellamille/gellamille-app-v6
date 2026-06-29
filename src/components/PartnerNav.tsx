@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ShoppingCart, ClipboardList, LifeBuoy, LogOut } from "lucide-react";
 
@@ -34,8 +33,8 @@ export function PartnerNav() {
 
   return (
     <header className="partner-nav">
-      <Link href="/partner" className="brand">
-        <Image className="partner-logo-image" src="/gellamille-logo.png" alt="Gellamille" width={3956} height={1062} priority />
+      <Link href="/partner" className="brand" aria-label="Gellamille partneri rendelő">
+        <span className="partner-logo-mark" aria-hidden="true" />
       </Link>
       <nav>
         <Link href="/partner/catalog">Termékek</Link>

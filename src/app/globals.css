@@ -373,6 +373,14 @@ textarea { min-height: 95px; resize: vertical; }
 .partner-nav nav a, .partner-nav .link-button { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; color: var(--ink); }
 .partner-nav .brand { padding: 0; gap: 12px; min-width: 0; }
 .partner-logo-image { width: clamp(136px, 16vw, 190px); height: auto; display: block; }
+.partner-logo-mark {
+  width: clamp(136px, 16vw, 190px);
+  aspect-ratio: 3956 / 1062;
+  display: block;
+  background: var(--brand-dark);
+  -webkit-mask: url("/gellamille-logo.png") center / contain no-repeat;
+  mask: url("/gellamille-logo.png") center / contain no-repeat;
+}
 .partner-content { width: min(1240px, 92vw); margin: 0 auto; padding: 34px 0 70px; }
 .partner-cart-link { position: relative; padding-right: 8px !important; }
 .partner-cart-badge {
@@ -591,7 +599,7 @@ textarea { min-height: 95px; resize: vertical; }
   .event-meta { justify-items: start; white-space: normal; }
   .partner-nav { align-items: flex-start; padding: 14px 4vw; }
   .partner-nav nav { flex-wrap: wrap; justify-content: flex-end; }
-  .partner-logo-image { width: 140px; }
+  .partner-logo-image, .partner-logo-mark { width: 140px; }
   .partner-hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .partner-hero-details { grid-template-columns: max-content minmax(0, 1fr); }
   .catalog-size-header { display: grid; }
