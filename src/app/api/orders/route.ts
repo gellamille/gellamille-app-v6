@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiUser } from "@/lib/api-auth";
 import { apiError } from "@/lib/http";
 import { query, transaction } from "@/lib/db";
+import { dateWithWeekdayHU, money } from "@/lib/format";
 
 const itemSchema = z.object({
   productId: z.number().int().positive(),
@@ -200,6 +201,7 @@ export async function POST(request: Request) {
           insert into public.notifications(organization_id,role_code,type,title,body,entity_type,entity_id)
           values($1,null,'order.submitted','Új rendelés érkezett',$2,'order',$3)
         `, [user.organization_id, `${partner.name} rendelést küldött be. Bruttó összeg: ${totals.gross_total_huf} Ft.`, String(order.id)]);
+        await queuePartnerOrderConfirmation(client, Number(user.organization_id), Number(partnerId), finalResult.rows[0], totals);
       }
 
       return finalResult.rows[0];
@@ -209,4 +211,54 @@ export async function POST(request: Request) {
   } catch (error) {
     return apiError(error, "A rendelés mentése sikertelen.");
   }
+}
+
+async function queuePartnerOrderConfirmation(client: any, organizationId: number, partnerId: number, order: any, totals: any) {
+  const partnerResult = await client.query(`
+    select email,name from public.partners where id=$1 and organization_id=$2
+  `, [partnerId, organizationId]);
+  const partner = partnerResult.rows[0] as { email: string | null; name: string } | undefined;
+  if (!partner?.email) return;
+
+  type OrderEmailItem = {
+    product_name_snapshot: string;
+    cartons: number;
+    unit_quantity: number;
+    gross_total_huf: number;
+  };
+  const items = await client.query(`
+    select product_name_snapshot,cartons,unit_quantity,gross_total_huf
+      from public.order_items
+     where order_id=$1 and cartons>0
+     order by product_name_snapshot
+  `, [order.id]);
+  const itemLines = (items.rows as OrderEmailItem[]).map((item) => (
+    `- ${item.product_name_snapshot}: ${item.cartons} karton / ${item.unit_quantity} db, bruttó ${money(item.gross_total_huf)}`
+  )).join("\n");
+  const body = [
+    `Kedves ${partner.name}!`,
+    "",
+    `Köszönjük, a rendelésedet rögzítettük: ${order.order_number}.`,
+    `Kért szállítási nap: ${dateWithWeekdayHU(order.requested_delivery_date)}`,
+    `Összesen: ${totals.total_cartons} karton / ${totals.total_units} db`,
+    `Bruttó összeg: ${money(totals.gross_total_huf)}`,
+    "",
+    "Rendelt tételek:",
+    itemLines || "- Nincs tétel",
+    "",
+    "A rendelést feldolgozzuk, és a szállítás előtt jelentkezünk, ha egyeztetés szükséges.",
+    "",
+    "Gellamille"
+  ].join("\n");
+
+  await client.query(`
+    insert into public.email_outbox(organization_id,event_type,recipient_email,subject,body_text,payload)
+    values($1,'order_confirmation',$2,$3,$4,$5::jsonb)
+  `, [
+    organizationId,
+    partner.email,
+    `Gellamille rendelés visszaigazolás - ${order.order_number}`,
+    body,
+    JSON.stringify({ order_id: order.id, order_number: order.order_number, partner_id: partnerId })
+  ]);
 }

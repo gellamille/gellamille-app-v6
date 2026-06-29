@@ -2,6 +2,15 @@ import { PageHeader } from "@/components/PageHeader";
 import { query } from "@/lib/db";
 import { DataArchiveForm } from "./DataArchiveForm";
 import { UserCreateForm } from "./UserCreateForm";
+import { NotificationRecipientForm } from "./NotificationRecipientForm";
+
+const recipientEventLabels: Record<string, string> = {
+  new_order: "Új rendelés érkezett",
+  order_changed: "Rendelés módosult",
+  order_updated: "Rendelés módosult",
+  order_deleted: "Rendelés törölve",
+  product_recall: "Termékvisszahívás"
+};
 
 export default async function SettingsPage() {
   const users = await query<any>(`
@@ -26,8 +35,9 @@ export default async function SettingsPage() {
         </div>
         <div>
           <h2>E-mail címzettek</h2>
+          <NotificationRecipientForm />
           <div className="table-wrap"><table><thead><tr><th>Esemény</th><th>Név</th><th>E-mail</th></tr></thead><tbody>
-            {recipients.map(r => <tr key={r.id}><td>{r.event_type}</td><td>{r.name ?? "—"}</td><td>{r.email}</td></tr>)}
+            {recipients.map(r => <tr key={r.id}><td>{recipientEventLabels[r.event_type] ?? r.event_type}</td><td>{r.name ?? "—"}</td><td>{r.email}</td></tr>)}
             {!recipients.length ? <tr><td colSpan={3}>Új rendelési címzett még nincs beállítva.</td></tr> : null}
           </tbody></table></div>
         </div>
