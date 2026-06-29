@@ -37,8 +37,8 @@ export async function POST(request: Request) {
 
     await query(`
       insert into public.audit_log(actor_user_id,action,entity_type,entity_id,after_data)
-      values($1,'partner.password.changed','app_user',$1,$2::jsonb)
-    `, [user.user_id, JSON.stringify({ partner_id: user.partner_id })]);
+      values($1,'partner.password.changed','app_user',$2,$3::jsonb)
+    `, [user.user_id, user.user_id, JSON.stringify({ partner_id: user.partner_id })]);
 
     return NextResponse.json({ ok: true });
   } catch (error) {
