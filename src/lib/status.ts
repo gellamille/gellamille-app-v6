@@ -113,6 +113,42 @@ export const expenseStatusLabels: Record<string, string> = {
   paid: "Kifizetett"
 };
 
+export const billingDocumentStatusLabels: Record<string, string> = {
+  draft: "Piszkozat",
+  ready: "Számlázásra vár",
+  queued: "Küldésre vár",
+  sent: "Elküldve",
+  issued: "Kiállítva",
+  partially_paid: "Részben fizetve",
+  paid: "Kifizetve",
+  overdue: "Lejárt",
+  failed: "Hibás",
+  void: "Sztornózva",
+  cancelled: "Törölve"
+};
+
+export const billingDocumentTypeLabels: Record<string, string> = {
+  invoice: "Számla",
+  proforma: "Díjbekérő",
+  storno: "Sztornó számla",
+  credit_note: "Jóváíró számla"
+};
+
+export const billingPaymentStatusLabels: Record<string, string> = {
+  unknown: "Ismeretlen",
+  unpaid: "Nincs fizetve",
+  partially_paid: "Részben fizetve",
+  paid: "Kifizetve",
+  overpaid: "Túlfizetve"
+};
+
+export const billingProviderStatusLabels: Record<string, string> = {
+  not_configured: "Nincs beállítva",
+  configured: "Beállítva",
+  disabled: "Kikapcsolva",
+  error: "Hibás beállítás"
+};
+
 export const allocationStatusLabels: Record<string, string> = {
   active: "Aktív",
   allocated: "Lefoglalva",

@@ -212,11 +212,11 @@ textarea { min-height: 95px; resize: vertical; }
   background: #edf0ee;
   color: #54625a;
 }
-.badge-approved, .badge-reserved, .badge-delivered, .badge-paid, .badge-active, .badge-available { background: #e4f1e8; color: #2d704a; }
-.badge-submitted, .badge-receivable, .badge-picking, .badge-packed, .badge-picked { background: #e5eef7; color: #365f87; }
-.badge-overdue, .badge-rejected, .badge-cancelled, .badge-void, .badge-recalled, .badge-scrapped, .badge-stock_critical { background: #f8e5e3; color: #9d3a32; }
+.badge-approved, .badge-reserved, .badge-delivered, .badge-paid, .badge-active, .badge-available, .badge-issued, .badge-configured { background: #e4f1e8; color: #2d704a; }
+.badge-submitted, .badge-receivable, .badge-picking, .badge-packed, .badge-picked, .badge-ready, .badge-queued, .badge-sent { background: #e5eef7; color: #365f87; }
+.badge-overdue, .badge-rejected, .badge-cancelled, .badge-void, .badge-recalled, .badge-scrapped, .badge-stock_critical, .badge-failed, .badge-error, .badge-disabled { background: #f8e5e3; color: #9d3a32; }
 .badge-partially_approved, .badge-partially_reserved, .badge-partially_delivered, .badge-partially_paid, .badge-quarantine, .badge-expired, .badge-stock_low { background: #f7edda; color: #8b611f; }
-.badge-created, .badge-in_stock, .badge-returned { background: #e4f1e8; color: #2d704a; }
+.badge-created, .badge-in_stock, .badge-returned, .badge-draft, .badge-unknown, .badge-unpaid, .badge-not_configured { background: #e4f1e8; color: #2d704a; }
 .badge-archived { background: #ecefed; color: #64706a; }
 .badge-stock_medium { background: #e8eef7; color: #365f87; }
 .badge-stock_high { background: #e7f3eb; color: #2f6e4a; }

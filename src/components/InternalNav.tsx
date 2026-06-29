@@ -7,7 +7,7 @@ import {
   Boxes, ClipboardList, Factory, LayoutDashboard, Truck,
   WalletCards, Users, ListTodo, FlaskConical, ChartNoAxesCombined,
   Settings, LogOut, IceCreamBowl, AlertTriangle, ScanBarcode, ArrowRightLeft,
-  BriefcaseBusiness, Warehouse, Store, ShieldCheck
+  BriefcaseBusiness, Warehouse, Store, ShieldCheck, FileText
 } from "lucide-react";
 
 const navGroups = [
@@ -38,6 +38,7 @@ const navGroups = [
     Icon: Store,
     items: [
       ["/internal/partners", "Partnerek", Users, ["admin","management","sales","finance"]],
+      ["/internal/billing", "Számlázás", FileText, ["admin","management","finance"]],
       ["/internal/finance", "Pénzügy", WalletCards, ["admin","management","finance"]],
       ["/internal/analytics", "Elemzések", ChartNoAxesCombined, ["admin","management","sales","finance"]]
     ]
