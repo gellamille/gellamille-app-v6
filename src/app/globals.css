@@ -203,6 +203,11 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(99,117,104,.12); }
 textarea { min-height: 95px; resize: vertical; }
+.field-invalid input, .field-invalid select, .field-invalid textarea {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(167, 71, 63, .12);
+}
+.field-message { color: var(--danger); font-size: 12px; font-weight: 800; }
 
 .badge {
   display: inline-flex;
