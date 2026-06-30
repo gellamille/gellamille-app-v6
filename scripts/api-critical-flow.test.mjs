@@ -103,6 +103,15 @@ describe("kritikus API jogosultsagi es folyamat invariantok", () => {
     assertContains("src/app/api/shipments/[id]/route.ts", "and d.organization_id=$4");
   });
 
+  it("order PDF export is internal-only and organization scoped", () => {
+    const file = "src/app/api/orders/print/route.ts";
+    assertContains(file, "apiUser(INTERNAL_ROLES)");
+    assertContains(file, "o.organization_id=$1");
+    assertContains(file, "p.organization_id=o.organization_id");
+    assertContains(file, "mode\") === \"selected\"");
+    assertContains(file, "Content-Type\": \"application/pdf\"");
+  });
+
   it("cron and email processing endpoints require bearer secret", () => {
     assertContains("src/app/api/cron/daily/route.ts", "requireSecret(request, process.env.CRON_SECRET)");
     assertContains("src/app/api/email/process/route.ts", "requireSecret(request, process.env.CRON_SECRET)");

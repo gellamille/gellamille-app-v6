@@ -20,6 +20,13 @@ export default async function OrdersPage({ searchParams }: { searchParams?: Prom
   const partnerId = single(filters?.partnerId) ?? "";
   const status = single(filters?.status) ?? "";
   const fulfillment = single(filters?.fulfillment) ?? "";
+  const printParams = new URLSearchParams();
+  if (from) printParams.set("from", from);
+  if (to) printParams.set("to", to);
+  if (partnerId) printParams.set("partnerId", partnerId);
+  if (status) printParams.set("status", status);
+  if (fulfillment) printParams.set("fulfillment", fulfillment);
+  const filteredPrintHref = `/api/orders/print${printParams.toString() ? `?${printParams}` : ""}`;
 
   const where = ["o.organization_id=$1", "o.archived_at is null"];
   const values: unknown[] = [user.organization_id];
@@ -49,7 +56,7 @@ export default async function OrdersPage({ searchParams }: { searchParams?: Prom
       <PageHeader
         title="Rendelések"
         description="A partneri rendelések üzleti, teljesítési és pénzügyi állapota külön követhető."
-        actions={<Link className="button button-primary" href="/internal/orders/new">Belső rendelés rögzítése</Link>}
+        actions={<><Link className="button" href={filteredPrintHref}>Szűrt lista PDF</Link><Link className="button button-primary" href="/internal/orders/new">Belső rendelés rögzítése</Link></>}
       />
       <form className="card filter-bar section-gap-small" action="/internal/orders">
         <label>Időszak kezdete<input name="from" type="date" defaultValue={from} /></label>
@@ -59,26 +66,34 @@ export default async function OrdersPage({ searchParams }: { searchParams?: Prom
         <label>Teljesítés<select name="fulfillment" defaultValue={fulfillment}><option value="">Összes</option>{Object.entries(fulfillmentLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <div className="inline filter-actions"><button className="button button-primary">Szűrés</button><Link className="button" href="/internal/orders">Törlés</Link></div>
       </form>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Rendelés</th><th>Partner</th><th>Kért nap</th><th>Rendelési állapot</th><th>Teljesítés</th><th>Pénzügy</th><th>Karton</th><th>Bruttó</th></tr></thead>
-          <tbody>
-            {orders.map((o) => (
-              <tr key={o.id}>
-                <td><Link href={`/internal/orders/${o.id}`} className="mono">{o.order_number}</Link></td>
-                <td>{o.partner_name}</td>
-                <td>{dateHU(o.requested_delivery_date)}</td>
-                <td><StatusBadge value={o.status} label={huLabel(orderStatusLabels, o.status)} /></td>
-                <td><StatusBadge value={o.fulfillment_status} label={huLabel(fulfillmentLabels, o.fulfillment_status)} /></td>
-                <td><StatusBadge value={o.finance_status} label={huLabel(financeStatusLabels, o.finance_status)} /></td>
-                <td>{o.total_cartons}</td>
-                <td>{money(o.gross_total_huf)}</td>
-              </tr>
-            ))}
-            {!orders.length ? <tr><td colSpan={8}>Még nincs rendelés.</td></tr> : null}
-          </tbody>
-        </table>
-      </div>
+      <form action="/api/orders/print" method="get" className="section-gap-small">
+        <input type="hidden" name="mode" value="selected" />
+        <div className="inline section-gap-small">
+          <button className="button" type="submit">Kijelöltek PDF</button>
+          <span className="text-muted">Jelölj ki több rendelést, majd töltsd le az összevont összesítőt.</span>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>PDF</th><th>Rendelés</th><th>Partner</th><th>Kért nap</th><th>Rendelési állapot</th><th>Teljesítés</th><th>Pénzügy</th><th>Karton</th><th>Bruttó</th></tr></thead>
+            <tbody>
+              {orders.map((o) => (
+                <tr key={o.id}>
+                  <td><input type="checkbox" name="orderId" value={o.id} aria-label={`${o.order_number} kijelölése PDF-hez`} /></td>
+                  <td><Link href={`/internal/orders/${o.id}`} className="mono">{o.order_number}</Link></td>
+                  <td>{o.partner_name}</td>
+                  <td>{dateHU(o.requested_delivery_date)}</td>
+                  <td><StatusBadge value={o.status} label={huLabel(orderStatusLabels, o.status)} /></td>
+                  <td><StatusBadge value={o.fulfillment_status} label={huLabel(fulfillmentLabels, o.fulfillment_status)} /></td>
+                  <td><StatusBadge value={o.finance_status} label={huLabel(financeStatusLabels, o.finance_status)} /></td>
+                  <td>{o.total_cartons}</td>
+                  <td>{money(o.gross_total_huf)}</td>
+                </tr>
+              ))}
+              {!orders.length ? <tr><td colSpan={9}>Még nincs rendelés.</td></tr> : null}
+            </tbody>
+          </table>
+        </div>
+      </form>
     </div>
   );
 }
