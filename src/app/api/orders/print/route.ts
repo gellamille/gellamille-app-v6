@@ -113,14 +113,51 @@ async function orderItems(orderIds: number[]) {
 
 function generatePdf(orders: OrderRow[], items: ItemRow[]) {
   return new Promise<Buffer>((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 36, size: "A4", bufferPages: true });
+    const doc = new PDFDocument({ layout: "landscape", margin: 32, size: "A4", bufferPages: true });
     const chunks: Buffer[] = [];
     doc.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
+    const left = doc.page.margins.left;
+    const right = doc.page.width - doc.page.margins.right;
+    const bottom = doc.page.height - doc.page.margins.bottom;
+    const tableWidth = right - left;
+
+    const ensureSpace = (height: number) => {
+      if (doc.y + height > bottom) {
+        doc.addPage();
+        doc.x = left;
+        doc.y = doc.page.margins.top;
+      }
+    };
+
+    const drawProductHeader = () => {
+      const y = doc.y;
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#111");
+      doc.text("Termek", left, y, { width: tableWidth - 260 });
+      doc.text("Karton", right - 245, y, { width: 65, align: "right" });
+      doc.text("Rendelt db", right - 165, y, { width: 75, align: "right" });
+      doc.text("Hatralevo db", right - 80, y, { width: 80, align: "right" });
+      doc.moveTo(left, y + 15).lineTo(right, y + 15).strokeColor("#cccccc").stroke();
+      doc.fillColor("#111");
+      doc.y = y + 21;
+    };
+
+    const drawItemRow = (name: string, cartons: number, units: number, remaining: number) => {
+      const rowHeight = Math.max(14, doc.heightOfString(safeText(name), { width: tableWidth - 260 }) + 3);
+      ensureSpace(rowHeight + 2);
+      const y = doc.y;
+      doc.font("Helvetica").fontSize(9).fillColor("#111");
+      doc.text(safeText(name), left, y, { width: tableWidth - 260 });
+      doc.text(String(cartons), right - 245, y, { width: 65, align: "right" });
+      doc.text(String(units), right - 165, y, { width: 75, align: "right" });
+      doc.text(String(remaining), right - 80, y, { width: 80, align: "right" });
+      doc.y = y + rowHeight;
+    };
+
     const now = new Date();
-    doc.font("Helvetica-Bold").fontSize(18).text(safeText("Összevont rendelési összesítő"));
+    doc.font("Helvetica-Bold").fontSize(17).text(safeText("Összevont rendelési összesítő"), left, doc.y, { width: tableWidth });
     doc.font("Helvetica").fontSize(9).fillColor("#555").text(`Generalva: ${dateHU(now)} ${now.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}`);
     doc.moveDown(0.6).fillColor("#111");
     doc.fontSize(10).text(`Rendelesek: ${orders.length} db`);
@@ -142,59 +179,36 @@ function generatePdf(orders: OrderRow[], items: ItemRow[]) {
     }
 
     doc.moveDown(1);
-    doc.font("Helvetica-Bold").fontSize(14).text(safeText("Termék összesítő"));
+    doc.font("Helvetica-Bold").fontSize(13).text(safeText("Termék összesítő"), left, doc.y, { width: tableWidth });
     doc.moveDown(0.3);
-    const startX = doc.x;
-    let y = doc.y;
-    const drawHeader = () => {
-      doc.font("Helvetica-Bold").fontSize(9);
-      doc.text("Termek", startX, y, { width: 220 });
-      doc.text("Karton", startX + 230, y, { width: 60, align: "right" });
-      doc.text("Rendelt db", startX + 300, y, { width: 75, align: "right" });
-      doc.text("Hatralevo db", startX + 385, y, { width: 90, align: "right" });
-      y += 18;
-      doc.moveTo(startX, y - 5).lineTo(560, y - 5).strokeColor("#cccccc").stroke();
-      doc.fillColor("#111");
-    };
-    drawHeader();
-    doc.font("Helvetica").fontSize(9);
+    drawProductHeader();
     for (const item of [...summary.values()].sort((a, b) => a.product_name.localeCompare(b.product_name, "hu"))) {
-      if (y > 760) {
-        doc.addPage();
-        y = 36;
-        drawHeader();
-        doc.font("Helvetica").fontSize(9);
-      }
-      doc.text(safeText(`${item.product_name} ${item.size_ml ? `${item.size_ml} ml` : ""}`), startX, y, { width: 220 });
-      doc.text(String(item.cartons), startX + 230, y, { width: 60, align: "right" });
-      doc.text(String(item.unit_quantity), startX + 300, y, { width: 75, align: "right" });
-      doc.text(String(item.remaining_units), startX + 385, y, { width: 90, align: "right" });
-      y += 16;
+      drawItemRow(`${item.product_name} ${item.size_ml ? `${item.size_ml} ml` : ""}`, item.cartons, item.unit_quantity, item.remaining_units);
     }
 
-    doc.y = y + 24;
-    if (doc.y > 680) {
-      doc.addPage();
-    }
-    doc.font("Helvetica-Bold").fontSize(14).text(safeText("Rendelésenkénti bontás"));
+    doc.moveDown(1.1);
+    ensureSpace(54);
+    doc.font("Helvetica-Bold").fontSize(13).text(safeText("Rendelésenkénti bontás"), left, doc.y, { width: tableWidth });
     for (const order of orders) {
-      if (doc.y > 710) doc.addPage();
-      doc.moveDown(0.8);
-      doc.font("Helvetica-Bold").fontSize(11).text(safeText(`${order.order_number} - ${order.partner_name}`));
+      ensureSpace(64);
+      doc.moveDown(0.6);
+      doc.font("Helvetica-Bold").fontSize(10).fillColor("#111").text(safeText(`${order.order_number} - ${order.partner_name}`), left, doc.y, { width: tableWidth });
       doc.font("Helvetica").fontSize(9).fillColor("#555")
         .text(safeText(`Kert nap: ${dateHU(order.requested_delivery_date)} | Karton: ${order.total_cartons} | Darab: ${order.total_units}`));
       if (order.delivery_address) doc.text(safeText(`Cim: ${order.delivery_address}`));
       doc.fillColor("#111");
       const orderItems = items.filter((item) => Number(item.order_id) === Number(order.id));
+      doc.moveDown(0.3);
+      drawProductHeader();
       for (const item of orderItems) {
-        doc.font("Helvetica").fontSize(9).text(safeText(`- ${item.product_name}: ${item.cartons} karton / ${item.unit_quantity} db, hatralevo ${item.remaining_units} db`), { indent: 10 });
+        drawItemRow(`${item.product_name} ${item.size_ml ? `${item.size_ml} ml` : ""}`, item.cartons, item.unit_quantity, item.remaining_units);
       }
     }
 
     const pages = doc.bufferedPageRange();
     for (let i = 0; i < pages.count; i++) {
       doc.switchToPage(i);
-      doc.font("Helvetica").fontSize(8).fillColor("#777").text(`${i + 1}/${pages.count}`, 520, 805, { align: "right" });
+      doc.font("Helvetica").fontSize(8).fillColor("#777").text(`${i + 1}/${pages.count}`, right - 60, bottom + 8, { width: 60, align: "right" });
     }
 
     doc.end();
