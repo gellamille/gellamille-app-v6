@@ -4,6 +4,7 @@ import { apiUser } from "@/lib/api-auth";
 import { query } from "@/lib/db";
 import { dateHU } from "@/lib/format";
 import { INTERNAL_ROLES } from "@/lib/auth";
+import { huLabel, paymentMethodLabels } from "@/lib/status";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,13 @@ type OrderRow = {
   id: number;
   order_number: string;
   partner_name: string;
+  billing_name: string | null;
+  tax_number: string | null;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  default_payment_method: string | null;
+  payment_terms_days: number;
   requested_delivery_date: string | Date | null;
   delivery_address: string | null;
   status: string;
@@ -86,7 +94,8 @@ async function selectedOrders(organizationId: number, url: URL) {
   return query<OrderRow>(`
     select o.id,o.order_number,o.requested_delivery_date,o.status,o.fulfillment_status,
            o.total_cartons,o.total_units,o.note,
-           p.name as partner_name,
+           p.name as partner_name,p.billing_name,p.tax_number,p.contact_name,p.email,p.phone,
+           p.default_payment_method,p.payment_terms_days,
            concat_ws(', ', pa.postal_code, pa.city, pa.address_line1) as delivery_address
       from public.orders o
       join public.partners p on p.id=o.partner_id and p.organization_id=o.organization_id
@@ -163,6 +172,35 @@ function generatePdf(orders: OrderRow[], items: ItemRow[]) {
       doc.y = y + rowHeight;
     };
 
+    const drawPartnerBlock = (order: OrderRow) => {
+      const payment = huLabel(paymentMethodLabels, order.default_payment_method);
+      const paymentLine = order.default_payment_method === "bank_transfer"
+        ? `${payment}, ${order.payment_terms_days} nap`
+        : payment;
+      const lines = [
+        ["Partner", order.partner_name],
+        ["Szamlazasi nev", order.billing_name || order.partner_name],
+        ["Adoszam", order.tax_number || "-"],
+        ["Kapcsolattarto", order.contact_name || "-"],
+        ["E-mail", order.email || "-"],
+        ["Telefon", order.phone || "-"],
+        ["Fizetes", paymentLine],
+        ["Szallitasi cim", order.delivery_address || "-"]
+      ];
+      ensureSpace(86);
+      const y = doc.y;
+      doc.font("Helvetica-Bold").fontSize(10).fillColor("#111").text("Partner adatok", left, y, { width: tableWidth });
+      doc.font("Helvetica").fontSize(8.5).fillColor("#111");
+      const colWidth = tableWidth / 2;
+      for (const [index, [label, value]] of lines.entries()) {
+        const x = index % 2 === 0 ? left : left + colWidth;
+        const rowY = y + 18 + Math.floor(index / 2) * 14;
+        doc.font("Helvetica-Bold").text(`${label}:`, x, rowY, { width: 90 });
+        doc.font("Helvetica").text(safeText(value), x + 92, rowY, { width: colWidth - 100 });
+      }
+      doc.y = y + 78;
+    };
+
     const now = new Date();
     const singleOrder = orders.length === 1 ? orders[0] : null;
     doc.font("Helvetica-Bold").fontSize(17).text(safeText(singleOrder ? "Rendelés nyomtatása" : "Összevont rendelési összesítő"), left, doc.y, { width: tableWidth });
@@ -172,7 +210,8 @@ function generatePdf(orders: OrderRow[], items: ItemRow[]) {
     if (singleOrder) {
       doc.text(safeText(`${singleOrder.order_number} - ${singleOrder.partner_name}`));
       doc.text(safeText(`Kert nap: ${dateHU(singleOrder.requested_delivery_date)} | Karton: ${singleOrder.total_cartons} | Darab: ${singleOrder.total_units}`));
-      if (singleOrder.delivery_address) doc.text(safeText(`Cim: ${singleOrder.delivery_address}`));
+      doc.moveDown(0.8);
+      drawPartnerBlock(singleOrder);
     } else {
       doc.text(`Rendelesek: ${orders.length} db`);
       doc.text(`Osszes karton: ${orders.reduce((sum, order) => sum + Number(order.total_cartons ?? 0), 0)} karton`);
@@ -206,12 +245,13 @@ function generatePdf(orders: OrderRow[], items: ItemRow[]) {
       ensureSpace(54);
       doc.font("Helvetica-Bold").fontSize(13).text(safeText("Rendelésenkénti bontás"), left, doc.y, { width: tableWidth });
       for (const order of orders) {
-        ensureSpace(64);
+        ensureSpace(132);
         doc.moveDown(0.6);
         doc.font("Helvetica-Bold").fontSize(10).fillColor("#111").text(safeText(`${order.order_number} - ${order.partner_name}`), left, doc.y, { width: tableWidth });
         doc.font("Helvetica").fontSize(9).fillColor("#555")
           .text(safeText(`Kert nap: ${dateHU(order.requested_delivery_date)} | Karton: ${order.total_cartons} | Darab: ${order.total_units}`));
-        if (order.delivery_address) doc.text(safeText(`Cim: ${order.delivery_address}`));
+        doc.moveDown(0.5);
+        drawPartnerBlock(order);
         doc.fillColor("#111");
         const orderItems = items.filter((item) => Number(item.order_id) === Number(order.id));
         doc.moveDown(0.3);

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { query } from "@/lib/db";
@@ -98,16 +99,16 @@ export default async function ShipmentsPage() {
       <section className="grid grid-2">
         <div>
           <h2>Járatok</h2>
-          <div className="table-wrap"><table><thead><tr><th>Járat</th><th>Dátum</th><th>Futár</th><th>Jármű</th><th>Állapot</th><th>Megálló</th></tr></thead><tbody>
-            {runs.map(r => <tr key={r.id}><td className="mono">{r.run_number}</td><td>{dateHU(r.planned_date)}</td><td>{r.driver_name ?? "—"}</td><td>{r.vehicle ?? "—"}</td><td><StatusBadge value={r.status} label={runStatusLabels[r.status] ?? r.status} /></td><td>{r.delivery_count}<div className="text-muted">{r.total_cartons} karton</div></td></tr>)}
-            {!runs.length ? <tr><td colSpan={6}>Még nincs járat.</td></tr> : null}
+          <div className="table-wrap"><table><thead><tr><th>Járat</th><th>Dátum</th><th>Futár</th><th>Jármű</th><th>Állapot</th><th>Megálló</th><th>PDF</th></tr></thead><tbody>
+            {runs.map(r => <tr key={r.id}><td className="mono">{r.run_number}</td><td>{dateHU(r.planned_date)}</td><td>{r.driver_name ?? "—"}</td><td>{r.vehicle ?? "—"}</td><td><StatusBadge value={r.status} label={runStatusLabels[r.status] ?? r.status} /></td><td>{r.delivery_count}<div className="text-muted">{r.total_cartons} karton</div></td><td><Link className="button" href={`/api/shipments/print?runId=${r.id}`}>Fuvarlevél</Link></td></tr>)}
+            {!runs.length ? <tr><td colSpan={7}>Még nincs járat.</td></tr> : null}
           </tbody></table></div>
         </div>
         <div>
           <h2>Átadásra váró rendelések</h2>
-          <div className="table-wrap"><table><thead><tr><th>Sorrend</th><th>Járat</th><th>Rendelés</th><th>Partner</th><th>Cím</th><th>Futár</th><th>Szállítás</th><th>Állapot</th></tr></thead><tbody>
-            {deliveries.map(d => <tr key={d.id}><td>{d.sequence_no ?? "—"}</td><td className="mono">{d.run_number ?? "—"}</td><td className="mono">{d.order_number}</td><td>{d.partner_name}</td><td>{d.delivery_address || "—"}</td><td>{d.driver_name ?? "—"}</td><td>{dateHU(d.planned_date)}<div className="text-muted">Kért: {dateHU(d.requested_delivery_date)}</div></td><td><StatusBadge value={d.status} label={deliveryStatusLabels[d.status] ?? d.status} /></td></tr>)}
-            {!deliveries.length ? <tr><td colSpan={8}>Nincs nyitott átadás.</td></tr> : null}
+          <div className="table-wrap"><table><thead><tr><th>Sorrend</th><th>Járat</th><th>Rendelés</th><th>Partner</th><th>Cím</th><th>Futár</th><th>Szállítás</th><th>Állapot</th><th>PDF</th></tr></thead><tbody>
+            {deliveries.map(d => <tr key={d.id}><td>{d.sequence_no ?? "—"}</td><td className="mono">{d.run_number ?? "—"}</td><td className="mono">{d.order_number}</td><td>{d.partner_name}</td><td>{d.delivery_address || "—"}</td><td>{d.driver_name ?? "—"}</td><td>{dateHU(d.planned_date)}<div className="text-muted">Kért: {dateHU(d.requested_delivery_date)}</div></td><td><StatusBadge value={d.status} label={deliveryStatusLabels[d.status] ?? d.status} /></td><td><Link className="button" href={`/api/shipments/print?deliveryId=${d.id}`}>PDF</Link></td></tr>)}
+            {!deliveries.length ? <tr><td colSpan={9}>Nincs nyitott átadás.</td></tr> : null}
           </tbody></table></div>
         </div>
       </section>
