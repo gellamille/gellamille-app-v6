@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiUser } from "@/lib/api-auth";
 import { apiError } from "@/lib/http";
 import { transaction } from "@/lib/db";
+import { enforceRateLimits, RATE_LIMITS, rateLimitOption, requestIp } from "@/lib/rate-limit";
 
 const schema = z.object({ reason: z.string().min(5).max(1000) });
 
@@ -10,10 +11,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const auth = await apiUser(["partner"]);
   if (auth.error || !auth.user) return auth.error ?? NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
   const user = auth.user;
+  const limited = await enforceRateLimits([
+    rateLimitOption(RATE_LIMITS.partnerApiIp, requestIp(request)),
+    rateLimitOption(RATE_LIMITS.partnerOrderWithdraw, String(user.partner_id ?? user.user_id))
+  ]);
+  if (limited) return limited;
   try {
     const { reason } = schema.parse(await request.json());
     const { id } = await params;
     const orderId = Number(id);
+    if (!Number.isInteger(orderId) || orderId <= 0) throw new Error("Hibás rendelésazonosító.");
     const order = await transaction(async (client) => {
       await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
       const current = await client.query<any>(`
@@ -34,6 +41,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
     return NextResponse.json(order);
   } catch (error) {
-    return apiError(error, "A rendelés visszavonása sikertelen.");
+    return apiError(error, "A rendelés visszavonása sikertelen.", { route: "/api/orders/[id]/withdraw", userId: user.user_id, partnerId: user.partner_id });
   }
 }

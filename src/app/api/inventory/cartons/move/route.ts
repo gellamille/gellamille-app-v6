@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiUser } from "@/lib/api-auth";
 import { apiError } from "@/lib/http";
 import { transaction } from "@/lib/db";
+import { lockInventoryLots, lockInventoryProductLocations, lockInventoryProducts } from "@/lib/inventory-locks";
 
 const schema = z.object({
   code: z.string().trim().min(3).max(80),
@@ -63,6 +64,13 @@ export async function POST(request: Request) {
       const quantity = Number(carton.quantity_units);
       const unitCost = Number(carton.purchase_unit_price_huf ?? 0);
       const reason = input.note || `Karton áthelyezés: ${carton.carton_code}`;
+      const organizationId = Number(user.organization_id);
+      await lockInventoryProducts(client, organizationId, [Number(carton.product_id)]);
+      await lockInventoryLots(client, organizationId, [Number(carton.lot_id)]);
+      await lockInventoryProductLocations(client, organizationId, [
+        { productId: Number(carton.product_id), locationId: Number(carton.location_id) },
+        { productId: Number(carton.product_id), locationId: Number(toLocation.id) }
+      ]);
 
       await client.query(`
         insert into public.inventory_movements(

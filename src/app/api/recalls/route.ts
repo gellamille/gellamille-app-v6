@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiUser } from "@/lib/api-auth";
 import { apiError } from "@/lib/http";
 import { transaction } from "@/lib/db";
+import { lockInventoryLots, lockInventoryProductLocations, lockInventoryProducts } from "@/lib/inventory-locks";
 
 const schema = z.object({
   title: z.string().min(3).max(250),
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
   try {
     const input = schema.parse(await request.json());
     const uniqueLotIds = [...new Set(input.lotIds)];
+    const organizationId = Number(user.organization_id);
     const result = await transaction(async (client) => {
       await client.query(`select set_config('request.jwt.claim.sub',$1,true)`, [user.user_id]);
 
@@ -48,6 +50,8 @@ export async function POST(request: Request) {
         const lot = lotResult.rows[0];
         if (!lot) throw new Error(`A LOT nem található: ${lotId}`);
         if (["void", "scrapped"].includes(lot.status)) throw new Error(`${lot.lot_number}: sztornózott vagy selejtezett LOT nem hívható vissza.`);
+        await lockInventoryProducts(client, organizationId, [Number(lot.product_id)]);
+        await lockInventoryLots(client, organizationId, [Number(lot.id)]);
 
         await client.query(`
           insert into public.product_recall_lots(recall_id,lot_id)
@@ -63,6 +67,10 @@ export async function POST(request: Request) {
            group by im.location_id,loc.code
           having coalesce(sum(im.quantity_units),0)>0
         `, [lot.id, user.organization_id]);
+        await lockInventoryProductLocations(client, organizationId, balances.rows.map((balance: any) => ({
+          productId: Number(lot.product_id),
+          locationId: Number(balance.location_id)
+        })));
         for (const balance of balances.rows) {
           await client.query(`
             insert into public.inventory_movements(organization_id,product_id,lot_id,location_id,movement_type,quantity_units,unit_cost_huf,reason,created_by)

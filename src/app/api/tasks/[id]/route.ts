@@ -13,11 +13,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const input = schema.parse(await request.json());
     const { id } = await params;
+    const taskId = Number(id);
+    if (!Number.isInteger(taskId) || taskId <= 0) throw new Error("Hibás feladatazonosító.");
     const rows = await query<any>(`
       update public.tasks set status=$3,
         completed_at=case when $3='done' then now() else null end
        where id=$1 and organization_id=$2 and archived_at is null returning *
-    `, [Number(id), user.organization_id, input.status]);
+    `, [taskId, user.organization_id, input.status]);
     if (!rows[0]) throw new Error("A feladat nem található.");
     return NextResponse.json(rows[0]);
   } catch (error) {

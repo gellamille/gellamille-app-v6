@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/PageHeader";
 import { query } from "@/lib/db";
+import { requireAppUser } from "@/lib/auth";
 import { DataArchiveForm } from "./DataArchiveForm";
 import { UserCreateForm } from "./UserCreateForm";
 import { NotificationRecipientForm } from "./NotificationRecipientForm";
@@ -13,12 +14,15 @@ const recipientEventLabels: Record<string, string> = {
 };
 
 export default async function SettingsPage() {
+  const user = await requireAppUser(["admin"]);
   const users = await query<any>(`
     select au.user_id, au.display_name, au.email, au.role, au.active, p.name as partner_name
-      from public.app_users au left join public.partners p on p.id=au.partner_id
+      from public.app_users au
+      left join public.partners p on p.id=au.partner_id and p.organization_id=au.organization_id
+     where au.organization_id=$1
      order by au.role, au.display_name
-  `);
-  const recipients = await query<any>(`select * from public.notification_recipients where active=true order by event_type,email`);
+  `, [user.organization_id]);
+  const recipients = await query<any>(`select * from public.notification_recipients where organization_id=$1 and active=true order by event_type,email`, [user.organization_id]);
   return (
     <div className="page">
       <PageHeader title="Beállítások és jogosultságok" description="A gyártási dolgozó csak a gyártás, LOT, készlet és alapanyag területeket látja." />

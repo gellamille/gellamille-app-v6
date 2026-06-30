@@ -4,7 +4,7 @@ import { requireAppUser } from "@/lib/auth";
 import { InternalOrderForm } from "./InternalOrderForm";
 
 export default async function NewInternalOrderPage() {
-  await requireAppUser(["admin", "management", "sales"]);
+  const user = await requireAppUser(["admin", "management", "sales"]);
 
   const partners = await query<any>(`
     select p.id, p.name,
@@ -17,9 +17,9 @@ export default async function NewInternalOrderPage() {
               where d.partner_id=p.id and d.active=true
            ), '[]'::jsonb) as delivery_days
       from public.partners p
-     where coalesce(p.active,true) = true
+     where p.organization_id=$1 and coalesce(p.active,true) = true and p.archived_at is null
      order by p.name
-  `);
+  `, [user.organization_id]);
   const products = await query<any>(`
     select p.id, p.code, p.name, p.size_ml, p.units_per_carton, p.net_unit_price_huf, p.vat_rate_bps,
            coalesce(s.physical_units,0)::int as physical_units,
@@ -27,9 +27,9 @@ export default async function NewInternalOrderPage() {
            coalesce(s.available_units,0)::int as available_units
       from public.products p
       left join public.v_product_stock_summary s on s.product_id=p.id
-     where p.status in ('active','seasonal') and p.active = true
+     where p.organization_id=$1 and p.status in ('active','seasonal') and p.active = true
      order by p.size_ml, p.sort_order
-  `);
+  `, [user.organization_id]);
   return (
     <div className="page">
       <PageHeader title="Belső rendelés rögzítése" description="Telefonon vagy e-mailben érkezett partneri rendelés felvitele." />

@@ -16,12 +16,16 @@ export default async function PartnerDashboardPage() {
               from public.partner_delivery_days d where d.partner_id=p.id and d.active=true) as delivery_days
       from public.partners p
       left join public.v_receivables_open v on v.partner_id=p.id
-     where p.id=$1 group by p.id
-  `, [user.partner_id]);
+     where p.id=$1 and p.organization_id=$2 and p.active=true and p.archived_at is null
+     group by p.id
+  `, [user.partner_id, user.organization_id]);
   const orders = await query<any>(`
     select id, order_number, requested_delivery_date, status, gross_total_huf
-      from public.orders where partner_id=$1 and archived_at is null order by created_at desc limit 5
-  `, [user.partner_id]);
+      from public.orders
+     where partner_id=$1 and organization_id=$2 and archived_at is null
+     order by created_at desc
+     limit 5
+  `, [user.partner_id, user.organization_id]);
   const products = await query<any>(`
     select p.id,p.code,p.sku,p.name,p.size_ml,p.units_per_carton,p.vat_rate_bps,p.status,
            coalesce(

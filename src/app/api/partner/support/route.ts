@@ -4,6 +4,7 @@ import { apiUser } from "@/lib/api-auth";
 import { transaction } from "@/lib/db";
 import { apiError } from "@/lib/http";
 import { supportTablesReady } from "@/lib/support";
+import { enforceRateLimits, RATE_LIMITS, rateLimitOption, requestIp } from "@/lib/rate-limit";
 
 const supportTicketSchema = z.object({
   subject: z.string().trim().min(3, "A tárgy legalább 3 karakter legyen.").max(180),
@@ -16,6 +17,11 @@ export async function POST(request: Request) {
   const auth = await apiUser(["partner"]);
   if (auth.error || !auth.user) return auth.error ?? NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
   const user = auth.user;
+  const limited = await enforceRateLimits([
+    rateLimitOption(RATE_LIMITS.partnerApiIp, requestIp(request)),
+    rateLimitOption(RATE_LIMITS.partnerTicketSubmit, String(user.partner_id ?? user.user_id))
+  ]);
+  if (limited) return limited;
 
   try {
     const input = supportTicketSchema.parse(await request.json());
@@ -96,6 +102,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ticket: result }, { status: 201 });
   } catch (error) {
-    return apiError(error, "A panasz beküldése sikertelen.");
+    return apiError(error, "A panasz beküldése sikertelen.", { route: "/api/partner/support", userId: user.user_id, partnerId: user.partner_id });
   }
 }

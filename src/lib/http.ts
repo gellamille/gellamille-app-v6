@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { reportError } from "@/lib/monitoring";
 
-export function apiError(error: unknown, fallback = "A művelet sikertelen.") {
-  console.error(error);
+export function apiError(error: unknown, fallback = "A művelet sikertelen.", context: Record<string, unknown> = {}) {
+  reportError(error, context);
   if (error instanceof ZodError) {
     const details = error.issues.map((issue) => issue.message).join(" ");
     return NextResponse.json({ error: details || fallback }, { status: 400 });

@@ -16,39 +16,40 @@ type Metrics = {
 };
 
 export default async function DashboardPage() {
-  await requireAppUser(INTERNAL_ROLES);
+  const user = await requireAppUser(INTERNAL_ROLES);
 
   const metrics = await one<Metrics>(`
     select
-      (select count(*)::int from public.orders where status = 'submitted' and archived_at is null) as submitted_orders,
-      (select count(*)::int from public.orders where status in ('approved','partially_approved','stock_shortage') and archived_at is null) as accepted_orders,
-      (select count(*)::int from public.orders where fulfillment_status in ('packed','partially_delivered') and archived_at is null) as packed_orders,
-      (select count(*)::int from public.v_product_stock_summary where available_units < minimum_stock_units) as low_stock_products,
-      (select count(*)::int from public.lots where status = 'active' and archived_at is null) as active_lots,
-      (select coalesce(sum(outstanding_huf),0)::bigint from public.v_receivables_open) as receivables_huf
-  `);
+      (select count(*)::int from public.orders where organization_id=$1 and status = 'submitted' and archived_at is null) as submitted_orders,
+      (select count(*)::int from public.orders where organization_id=$1 and status in ('approved','partially_approved','stock_shortage') and archived_at is null) as accepted_orders,
+      (select count(*)::int from public.orders where organization_id=$1 and fulfillment_status in ('packed','partially_delivered') and archived_at is null) as packed_orders,
+      (select count(*)::int from public.v_product_stock_summary s join public.products p on p.id=s.product_id where p.organization_id=$1 and s.available_units < s.minimum_stock_units) as low_stock_products,
+      (select count(*)::int from public.lots where organization_id=$1 and status = 'active' and archived_at is null) as active_lots,
+      (select coalesce(sum(v.outstanding_huf),0)::bigint from public.v_receivables_open v join public.orders o on o.id=v.order_id where o.organization_id=$1) as receivables_huf
+  `, [user.organization_id]);
 
   const orders = await query<any>(`
     select o.id, o.order_number, o.status, o.fulfillment_status, o.finance_status,
            o.requested_delivery_date, o.gross_total_huf, p.name as partner_name
       from public.orders o
-      join public.partners p on p.id = o.partner_id
-     where o.archived_at is null
+      join public.partners p on p.id = o.partner_id and p.organization_id=o.organization_id
+     where o.organization_id=$1 and o.archived_at is null
        and (
         o.status in ('submitted','approved','partially_approved','stock_shortage')
         or o.fulfillment_status in ('packed','partially_delivered')
        )
      order by o.created_at desc
      limit 8
-  `);
+  `, [user.organization_id]);
 
   const stockAlerts = await query<any>(`
     select product_id, product_name, product_code, available_units, minimum_stock_units
-      from public.v_product_stock_summary
-     where available_units < minimum_stock_units
+      from public.v_product_stock_summary s
+      join public.products p on p.id=s.product_id
+     where p.organization_id=$1 and available_units < minimum_stock_units
      order by available_units, product_name
      limit 8
-  `);
+  `, [user.organization_id]);
 
   const m = metrics ?? {
     submitted_orders: 0,

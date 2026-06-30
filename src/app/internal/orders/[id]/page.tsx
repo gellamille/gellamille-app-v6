@@ -15,6 +15,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const user = await requireAppUser(INTERNAL_ROLES);
 
   const { id } = await params;
+  const orderId = Number(id);
+  if (!Number.isInteger(orderId) || orderId <= 0) notFound();
   const order = await one<any>(`
     select o.*, p.name as partner_name, p.payment_terms_days,
            pa.name as delivery_address_name,
@@ -22,8 +24,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       from public.orders o
       join public.partners p on p.id = o.partner_id
       left join public.partner_addresses pa on pa.id = o.delivery_address_id
-     where o.id = $1 and o.archived_at is null
-  `, [id]);
+     where o.id = $1 and o.organization_id=$2 and o.archived_at is null
+  `, [orderId, user.organization_id]);
   if (!order) notFound();
 
   const items = await query<any>(`
@@ -42,7 +44,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       join public.products p on p.id = oi.product_id
      where oi.order_id = $1 and oi.unit_quantity > 0
      order by oi.id
-  `, [id]);
+  `, [order.id]);
 
   const history = await query<any>(`
     select h.*, au.display_name
@@ -50,11 +52,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       left join public.app_users au on au.user_id = h.changed_by
      where h.order_id = $1
      order by h.changed_at desc
-  `, [id]);
+  `, [order.id]);
 
   const receivables = await query<any>(`
-    select * from public.v_receivables_open where order_id = $1 order by delivered_at desc
-  `, [id]);
+    select v.*
+      from public.v_receivables_open v
+      join public.orders o on o.id=v.order_id
+     where v.order_id = $1 and o.organization_id=$2
+     order by v.delivered_at desc
+  `, [order.id, user.organization_id]);
   const lotAllocations = await query<any>(`
     select a.id,a.quantity_units,a.status,a.delivered_at,l.lot_number,l.best_before,oi.product_name_snapshot,
            c.carton_code,c.id as carton_id
@@ -64,7 +70,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       left join public.inventory_cartons c on c.id=a.carton_id
      where oi.order_id=$1
      order by oi.id,l.best_before,l.lot_number
-  `, [id]);
+  `, [order.id]);
   const cartonPickEvents = await query<any>(`
     select e.id,e.event_type,e.note,e.created_at,
            e.event_data->>'quantity_units' as quantity_units,
@@ -80,7 +86,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
      where e.organization_id=$1 and e.order_id=$2 and e.event_type in ('picked','unpicked')
      order by e.created_at desc,e.id desc
      limit 50
-  `, [user.organization_id, id]);
+  `, [user.organization_id, order.id]);
   const itemReadiness = items.map((item) => {
     const remaining = Math.max(0, Number(item.unit_quantity ?? 0) - Number(item.cancelled_quantity ?? 0) - Number(item.fulfilled_quantity ?? 0));
     const reserved = Number(item.reserved_quantity ?? 0);
@@ -108,7 +114,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <PageHeader
         title={order.order_number}
         description={`${order.partner_name} · Kért szállítás: ${dateWithWeekdayHU(order.requested_delivery_date)}`}
-        actions={<><OrderActions orderId={Number(id)} status={order.status} fulfillmentStatus={order.fulfillment_status} canDeliver={canDeliver} hasMissingReservation={hasMissingReservation} />{canEditOrder ? <Link className="button" href={`/internal/orders/${id}/edit`}>Szerkesztés</Link> : null}{canEditOrder ? <DeleteOrderButton orderId={Number(id)} /> : null}{canRecall ? <Link className="button button-danger" href={`/internal/recalls?orderId=${id}`}>Visszahívás</Link> : null}</>}
+        actions={<><OrderActions orderId={orderId} status={order.status} fulfillmentStatus={order.fulfillment_status} canDeliver={canDeliver} hasMissingReservation={hasMissingReservation} />{canEditOrder ? <Link className="button" href={`/internal/orders/${orderId}/edit`}>Szerkesztés</Link> : null}{canEditOrder ? <DeleteOrderButton orderId={orderId} /> : null}{canRecall ? <Link className="button button-danger" href={`/internal/recalls?orderId=${orderId}`}>Visszahívás</Link> : null}</>}
       />
       {readinessIssues.length ? (
         <section className="alert alert-warning section-gap">
@@ -161,7 +167,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       </section>
 
       <section className="section-gap">
-        <OrderCartonPicker orderId={Number(id)} enabled={canScanPick} />
+        <OrderCartonPicker orderId={orderId} enabled={canScanPick} />
       </section>
 
       <section className="section-gap">
@@ -204,7 +210,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     <td>{dateTimeHU(allocation.delivered_at)}</td>
                     <td>
                       {allocation.carton_id && ["allocated", "picked"].includes(allocation.status) ? (
-                        <UnpickCartonButton orderId={Number(id)} allocationId={Number(allocation.id)} cartonCode={allocation.carton_code} />
+                        <UnpickCartonButton orderId={orderId} allocationId={Number(allocation.id)} cartonCode={allocation.carton_code} />
                       ) : <span className="text-muted">—</span>}
                     </td>
                   </tr>

@@ -78,6 +78,15 @@ export async function GET(request: Request) {
         else 'receivable' end
       where o.status in ('closed','approved','partially_approved') and o.archived_at is null
     `);
+    await client.query(`
+      do $$
+      begin
+        if to_regclass('public.rate_limit_counters') is not null then
+          delete from public.rate_limit_counters
+           where updated_at < now() - interval '7 days';
+        end if;
+      end $$;
+    `);
     return {
       maintenance: maintenance.rows[0]?.result,
       low_stock_tasks: lowStockTasks.rows[0]?.created_tasks ?? 0

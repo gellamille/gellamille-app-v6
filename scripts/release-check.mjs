@@ -11,6 +11,15 @@ const requiredEnv = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "CRON_SECRET"
 ];
+const optionalEmailEnv = [
+  "RESEND_API_KEY",
+  "EMAIL_FROM",
+  "EMAIL_DELIVERY_MODE"
+];
+const optionalMonitoringEnv = [
+  "ERROR_WEBHOOK_URL",
+  "RATE_LIMIT_SALT"
+];
 
 const checks = [];
 
@@ -60,13 +69,25 @@ function checkEnv() {
   const hasVercelLink = existsSync(join(root, ".vercel", "project.json"));
   if (!missing.length) {
     pass("env presence", "Required variables found in process env or .env files.");
-    return;
-  }
-  if (hasVercelLink && process.env.RELEASE_CHECK_STRICT_ENV !== "1") {
+  } else if (hasVercelLink && process.env.RELEASE_CHECK_STRICT_ENV !== "1") {
     pass("env presence", `Missing locally: ${missing.join(", ")}. Vercel project is linked; use RELEASE_CHECK_STRICT_ENV=1 for strict local env checks.`);
-    return;
+  } else {
+    fail("env presence", `Missing variables: ${missing.join(", ")}`);
   }
-  fail("env presence", `Missing variables: ${missing.join(", ")}`);
+
+  const missingEmail = optionalEmailEnv.filter((key) => !process.env[key] && !dotEnv.get(key));
+  if (!missingEmail.length) {
+    pass("email env readiness", "Email variables found. Use EMAIL_DELIVERY_MODE=live only after DNS/provider verification.");
+  } else {
+    pass("email env readiness", `Optional until email go-live: ${missingEmail.join(", ")}`);
+  }
+
+  const missingMonitoring = optionalMonitoringEnv.filter((key) => !process.env[key] && !dotEnv.get(key));
+  if (!missingMonitoring.length) {
+    pass("monitoring env readiness", "Monitoring/rate-limit hardening variables found.");
+  } else {
+    pass("monitoring env readiness", `Optional but recommended for production: ${missingMonitoring.join(", ")}`);
+  }
 }
 
 function checkMigrations() {

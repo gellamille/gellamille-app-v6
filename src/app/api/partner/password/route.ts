@@ -4,6 +4,7 @@ import { apiUser } from "@/lib/api-auth";
 import { apiError } from "@/lib/http";
 import { query } from "@/lib/db";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { enforceRateLimits, RATE_LIMITS, rateLimitOption, requestIp } from "@/lib/rate-limit";
 
 const schema = z.object({
   password: z.string().min(8).max(128)
@@ -13,6 +14,11 @@ export async function POST(request: Request) {
   const auth = await apiUser(["partner"]);
   if (auth.error || !auth.user) return auth.error ?? NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
   const user = auth.user;
+  const limited = await enforceRateLimits([
+    rateLimitOption(RATE_LIMITS.partnerApiIp, requestIp(request)),
+    rateLimitOption(RATE_LIMITS.partnerPasswordChange, user.user_id)
+  ]);
+  if (limited) return limited;
 
   try {
     const input = schema.parse(await request.json());
@@ -42,6 +48,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return apiError(error, "A jelszó módosítása sikertelen.");
+    return apiError(error, "A jelszó módosítása sikertelen.", { route: "/api/partner/password", userId: user.user_id });
   }
 }

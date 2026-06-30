@@ -39,12 +39,14 @@ describe("kritikus API jogosultsagi es folyamat invariantok", () => {
     assertContains(file, "where id=$1 and organization_id=$2 and archived_at is null");
     assertContains(file, "where id=$1 and organization_id=$6 returning *");
     assertContains(file, "select overdue_policy from public.partners where id=$1 and organization_id=$2");
+    assertContains(file, "lockInventoryProducts(client, order.organization_id, itemsResult.rows.map");
   });
 
   it("FEFO allocation is scoped to organization on lots", () => {
     const file = "src/app/api/orders/[id]/actions/route.ts";
     assertContains(file, "p.organization_id=l.organization_id and l.organization_id=$3");
     assertContains(file, "update public.orders set fulfillment_status=$2 where id=$1 and organization_id=$3 returning *");
+    assertContains(file, "lockInventoryProductLocations(client, order.organization_id, items.rows.map");
   });
 
   it("scanner carton pick only touches own organization order and carton", () => {
@@ -72,6 +74,7 @@ describe("kritikus API jogosultsagi es folyamat invariantok", () => {
     assertContains("src/app/api/inventory/cartons/labels/generate/route.ts", "where l.id=$1 and l.organization_id=$2 and l.archived_at is null");
     assertContains("src/app/api/inventory/cartons/labels/generate/route.ts", "where organization_id=$1 and lot_id=$2 and archived_at is null");
     assertContains("src/app/api/inventory/cartons/labels/print/route.ts", "where c.organization_id=$1 and c.lot_id=$2 and c.id = any($3::bigint[])");
+    assertContains("src/app/api/inventory/cartons/labels/print/route.ts", "for update of c");
   });
 
   it("partner ticket create and reply use only own partner and organization records", () => {
@@ -98,5 +101,38 @@ describe("kritikus API jogosultsagi es folyamat invariantok", () => {
     assertContains("src/app/api/cron/daily/route.ts", "requireSecret(request, process.env.CRON_SECRET)");
     assertContains("src/app/api/email/process/route.ts", "requireSecret(request, process.env.CRON_SECRET)");
     assertMatches("src/lib/http.ts", /header === `Bearer \$\{secret\}`/);
+  });
+
+  it("email outbox can be staged before live provider connection", () => {
+    assertContains("src/lib/email.ts", "EMAIL_DELIVERY_MODE");
+    assertContains("src/lib/email.ts", "dry_run");
+    assertContains("src/lib/email.ts", "provider_message_id");
+    assertContains("database/migrations/018_email_delivery_readiness.sql", "next_attempt_at");
+    assertContains("database/migrations/018_email_delivery_readiness.sql", "email_outbox_queue_idx");
+  });
+
+  it("login and partner submission endpoints are rate limited", () => {
+    assertContains("src/app/login/page.tsx", 'fetch("/api/auth/login"');
+    assertContains("src/lib/rate-limit.ts", 'loginEmailIp: { scope: "auth.login.email_ip"');
+    assertContains("src/lib/rate-limit.ts", "rate_limit_counters");
+    assertContains("src/app/api/orders/route.ts", "RATE_LIMITS.partnerOrderSubmit");
+    assertContains("src/app/api/partner/support/route.ts", "RATE_LIMITS.partnerTicketSubmit");
+    assertContains("src/app/api/support/tickets/[id]/messages/route.ts", "RATE_LIMITS.partnerTicketMessage");
+    assertContains("database/migrations/019_rate_limit_and_monitoring.sql", "rate_limit_counters");
+  });
+
+  it("application errors use structured monitoring logs", () => {
+    assertContains("src/lib/http.ts", "reportError(error, context)");
+    assertContains("src/lib/monitoring.ts", "ERROR_WEBHOOK_URL");
+    assertContains("src/instrumentation.ts", "monitoring.registered");
+    assertContains("src/app/api/health/route.ts", "monitoringStatus()");
+  });
+
+  it("inventory write flows use transaction-scoped advisory locks for race-sensitive balances", () => {
+    assertContains("src/lib/inventory-locks.ts", "pg_advisory_xact_lock");
+    assertContains("src/lib/inventory-locks.ts", "lockInventoryProducts");
+    assertContains("src/app/api/inventory/corrections/route.ts", "lockInventoryProducts(client,organizationId");
+    assertContains("src/app/api/inventory/cartons/move/route.ts", "lockInventoryProductLocations(client, organizationId");
+    assertContains("src/app/api/recalls/route.ts", "lockInventoryProductLocations(client, organizationId");
   });
 });

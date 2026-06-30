@@ -30,9 +30,10 @@ export default async function ShipmentsPage() {
            coalesce(sum(o.total_cartons), 0)::int as total_cartons
       from public.shipping_runs sr
       left join public.deliveries d on d.shipping_run_id = sr.id
+        and d.organization_id=sr.organization_id
         and d.status not in ('delivered','cancelled')
         and d.archived_at is null
-      left join public.orders o on o.id = d.order_id and o.archived_at is null
+      left join public.orders o on o.id = d.order_id and o.organization_id=sr.organization_id and o.archived_at is null
      where sr.organization_id=$1
        and sr.archived_at is null
      group by sr.id
@@ -44,8 +45,8 @@ export default async function ShipmentsPage() {
            concat_ws(', ', pa.postal_code, pa.city, pa.address_line1) as delivery_address,
            sr.run_number, sr.driver_name
       from public.deliveries d
-      join public.partners p on p.id = d.partner_id
-      join public.orders o on o.id = d.order_id
+      join public.partners p on p.id = d.partner_id and p.organization_id=d.organization_id
+      join public.orders o on o.id = d.order_id and o.organization_id=d.organization_id
       left join public.partner_addresses pa on pa.id = d.address_id
       left join public.shipping_runs sr on sr.id=d.shipping_run_id
      where d.status not in ('delivered','cancelled')
@@ -61,8 +62,8 @@ export default async function ShipmentsPage() {
            o.fulfillment_status,o.total_cartons,
            concat_ws(', ', pa.postal_code, pa.city, pa.address_line1) as delivery_address
       from public.deliveries d
-      join public.partners p on p.id=d.partner_id
-      join public.orders o on o.id=d.order_id
+      join public.partners p on p.id=d.partner_id and p.organization_id=d.organization_id
+      join public.orders o on o.id=d.order_id and o.organization_id=d.organization_id
       left join public.partner_addresses pa on pa.id = d.address_id
      where d.organization_id=$1
        and d.shipping_run_id is not null
@@ -78,7 +79,7 @@ export default async function ShipmentsPage() {
            sr.id as shipping_run_id,sr.run_number,
            concat_ws(', ', pa.postal_code, pa.city, pa.address_line1) as delivery_address
       from public.orders o
-      join public.partners p on p.id=o.partner_id
+      join public.partners p on p.id=o.partner_id and p.organization_id=o.organization_id
       left join public.deliveries d on d.order_id=o.id and d.status not in ('delivered','cancelled')
         and d.archived_at is null
       left join public.shipping_runs sr on sr.id=d.shipping_run_id

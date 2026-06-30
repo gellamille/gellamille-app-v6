@@ -25,10 +25,11 @@ export async function POST(request: Request) {
                  select 1 from public.inventory_carton_events e
                   where e.organization_id=c.organization_id and e.carton_id=c.id and e.event_type in ('label_printed','label_reprinted') and e.archived_at is null
                ) as printed_before
-          from public.inventory_cartons c
-          join public.lots l on l.id=c.lot_id
+         from public.inventory_cartons c
+         join public.lots l on l.id=c.lot_id
          where c.organization_id=$1 and c.lot_id=$2 and c.id = any($3::bigint[]) and c.archived_at is null and l.archived_at is null
          order by c.id
+         for update of c
       `, [user.organization_id, input.lotId, input.cartonIds]);
 
       if (cartons.rowCount !== input.cartonIds.length) {

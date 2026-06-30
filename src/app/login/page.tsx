@@ -3,7 +3,6 @@
 import { FormEvent, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -19,17 +18,15 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
-      setError("A Supabase kapcsolat nincs beállítva ehhez a környezethez.");
-      setLoading(false);
-      return;
-    }
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
 
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      setError("Hibás e-mail-cím vagy jelszó.");
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setError(typeof data.error === "string" ? data.error : "Hibás e-mail-cím vagy jelszó.");
       setLoading(false);
       return;
     }

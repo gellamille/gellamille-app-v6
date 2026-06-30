@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiUser } from "@/lib/api-auth";
 import { apiError } from "@/lib/http";
 import { transaction } from "@/lib/db";
+import { lockInventoryLots, lockInventoryProductLocations, lockInventoryProducts } from "@/lib/inventory-locks";
 
 const schema=z.object({
   lotId:z.number().int().positive(),locationId:z.number().int().positive(),
@@ -29,6 +30,10 @@ export async function POST(request:Request){
    if(lot.status!=="active")throw new Error("Csak aktív LOT készlete korrigálható.");
    const loc=await client.query(`select 1 from public.inventory_locations where id=$1 and organization_id=$2 and active`,[input.locationId,user.organization_id]);
    if(!loc.rowCount)throw new Error("A készlethely nem található.");
+   const organizationId=Number(user.organization_id);
+   await lockInventoryProducts(client,organizationId,[Number(lot.product_id)]);
+   await lockInventoryLots(client,organizationId,[Number(lot.id)]);
+   await lockInventoryProductLocations(client,organizationId,[{productId:Number(lot.product_id),locationId:input.locationId}]);
    let quantity=input.quantityUnits;
    if(consumption.has(input.movementType)) quantity=-Math.abs(quantity);
    if(input.movementType!=="correction"&&input.quantityUnits<0) quantity=-Math.abs(input.quantityUnits);

@@ -4,6 +4,7 @@ import { apiUser } from "@/lib/api-auth";
 import { one, transaction } from "@/lib/db";
 import { apiError } from "@/lib/http";
 import { supportTablesReady } from "@/lib/support";
+import { enforceRateLimits, RATE_LIMITS, rateLimitOption, requestIp } from "@/lib/rate-limit";
 
 const messageSchema = z.object({
   body: z.string().trim().min(1, "Az üzenet nem lehet üres.").max(3000)
@@ -15,6 +16,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const auth = await apiUser(["partner", ...internalRoles]);
   if (auth.error || !auth.user) return auth.error ?? NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
   const user = auth.user;
+  if (user.role === "partner") {
+    const limited = await enforceRateLimits([
+      rateLimitOption(RATE_LIMITS.partnerApiIp, requestIp(request)),
+      rateLimitOption(RATE_LIMITS.partnerTicketMessage, String(user.partner_id ?? user.user_id))
+    ]);
+    if (limited) return limited;
+  }
 
   try {
     const { id } = await params;
@@ -63,6 +71,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ message: result }, { status: 201 });
   } catch (error) {
-    return apiError(error, "Az üzenet mentése sikertelen.");
+    return apiError(error, "Az üzenet mentése sikertelen.", { route: "/api/support/tickets/[id]/messages", userId: user.user_id, role: user.role });
   }
 }

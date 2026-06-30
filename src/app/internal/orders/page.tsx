@@ -13,7 +13,7 @@ function single(value: string | string[] | undefined) {
 }
 
 export default async function OrdersPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
-  await requireAppUser(INTERNAL_ROLES);
+  const user = await requireAppUser(INTERNAL_ROLES);
   const filters = await searchParams;
   const from = single(filters?.from) ?? "";
   const to = single(filters?.to) ?? "";
@@ -21,22 +21,22 @@ export default async function OrdersPage({ searchParams }: { searchParams?: Prom
   const status = single(filters?.status) ?? "";
   const fulfillment = single(filters?.fulfillment) ?? "";
 
-  const where = ["o.archived_at is null"];
-  const values: unknown[] = [];
+  const where = ["o.organization_id=$1", "o.archived_at is null"];
+  const values: unknown[] = [user.organization_id];
   if (from) { values.push(from); where.push(`o.requested_delivery_date >= $${values.length}::date`); }
   if (to) { values.push(to); where.push(`o.requested_delivery_date <= $${values.length}::date`); }
-  if (partnerId) { values.push(Number(partnerId)); where.push(`o.partner_id = $${values.length}`); }
+  if (partnerId && Number.isInteger(Number(partnerId)) && Number(partnerId) > 0) { values.push(Number(partnerId)); where.push(`o.partner_id = $${values.length}`); }
   if (status) { values.push(status); where.push(`o.status = $${values.length}`); }
   if (fulfillment) { values.push(fulfillment); where.push(`o.fulfillment_status = $${values.length}`); }
   const whereSql = where.length ? `where ${where.join(" and ")}` : "";
 
-  const partners = await query<any>(`select id,name from public.partners where active and archived_at is null order by name`);
+  const partners = await query<any>(`select id,name from public.partners where organization_id=$1 and active and archived_at is null order by name`, [user.organization_id]);
   const orders = await query<any>(`
     select o.*, p.name as partner_name,
            coalesce(sum(oi.reserved_quantity),0)::int as reserved_units,
            coalesce(sum(oi.fulfilled_quantity),0)::int as fulfilled_units
       from public.orders o
-      join public.partners p on p.id = o.partner_id
+      join public.partners p on p.id = o.partner_id and p.organization_id=o.organization_id
       left join public.order_items oi on oi.order_id = o.id
      ${whereSql}
      group by o.id, p.name

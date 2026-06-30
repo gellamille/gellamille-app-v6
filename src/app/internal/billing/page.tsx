@@ -55,9 +55,9 @@ export default async function BillingPage({ searchParams }: { searchParams?: Pro
     select bd.*, p.name as partner_name, o.order_number, r.receivable_number,
            coalesce(item_counts.item_count,0)::int as item_count
       from public.billing_documents bd
-      join public.partners p on p.id=bd.partner_id
-      left join public.orders o on o.id=bd.order_id
-      left join public.receivables r on r.id=bd.receivable_id
+      join public.partners p on p.id=bd.partner_id and p.organization_id=bd.organization_id
+      left join public.orders o on o.id=bd.order_id and o.organization_id=bd.organization_id
+      left join public.receivables r on r.id=bd.receivable_id and r.organization_id=bd.organization_id
       left join (
         select billing_document_id,count(*)::int as item_count
           from public.billing_document_items
@@ -89,8 +89,8 @@ export default async function BillingPage({ searchParams }: { searchParams?: Pro
   const messages = await query<any>(`
     select m.*, bd.external_invoice_number, p.name as partner_name
       from public.billing_provider_messages m
-      left join public.billing_documents bd on bd.id=m.billing_document_id
-      left join public.partners p on p.id=bd.partner_id
+      left join public.billing_documents bd on bd.id=m.billing_document_id and bd.organization_id=m.organization_id
+      left join public.partners p on p.id=bd.partner_id and p.organization_id=m.organization_id
      where m.organization_id=$1
      order by m.created_at desc
      limit 30

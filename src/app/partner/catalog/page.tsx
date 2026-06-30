@@ -5,7 +5,11 @@ import { Catalog } from "./Catalog";
 
 export default async function CatalogPage() {
   const user=await requireAppUser(["partner"]);
-  const partner=await one<any>(`select price_list_id from public.partners where id=$1`,[user.partner_id]);
+  const partner=await one<any>(`
+    select price_list_id
+      from public.partners
+     where id=$1 and organization_id=$2 and active=true and archived_at is null
+  `,[user.partner_id,user.organization_id]);
   const products = await query<any>(`
     select p.id,p.code,p.sku,p.name,p.size_ml,p.units_per_carton,p.vat_rate_bps,p.status,
            coalesce(

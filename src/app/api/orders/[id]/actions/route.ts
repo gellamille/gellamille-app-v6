@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiUser } from "@/lib/api-auth";
 import { apiError } from "@/lib/http";
 import { transaction } from "@/lib/db";
+import { lockInventoryLots, lockInventoryProductLocations, lockInventoryProducts } from "@/lib/inventory-locks";
 
 const schema = z.object({
   action: z.enum(["approve", "allocate_fefo", "deliver_all", "cancel", "reject"]),
@@ -79,6 +80,11 @@ async function approveOrder(client: any, order: OrderRow, userId: string, allowP
 
   const locationId = await centralLocation(client, order.organization_id);
   const itemsResult = await client.query(`select id,product_id,unit_quantity,cancelled_quantity,fulfilled_quantity from public.order_items where order_id=$1 order by id for update`, [order.id]);
+  await lockInventoryProducts(client, order.organization_id, itemsResult.rows.map((item: any) => Number(item.product_id)));
+  await lockInventoryProductLocations(client, order.organization_id, itemsResult.rows.map((item: any) => ({
+    productId: Number(item.product_id),
+    locationId
+  })));
   let requested = 0;
   let reserved = 0;
 
@@ -140,6 +146,11 @@ async function allocateFefo(client: any, order: OrderRow, userId: string) {
      order by id
      for update
   `, [order.id]);
+  await lockInventoryProducts(client, order.organization_id, items.rows.map((item: any) => Number(item.product_id)));
+  await lockInventoryProductLocations(client, order.organization_id, items.rows.map((item: any) => ({
+    productId: Number(item.product_id),
+    locationId
+  })));
   let totalRequired = 0;
   let totalReserved = 0;
   let totalAllocated = 0;
@@ -211,6 +222,7 @@ async function deliverAll(client: any, order: OrderRow, userId: string) {
       `, [order.organization_id, order.id, order.partner_id, order.delivery_address_id, order.requested_delivery_date, userId]);
   const delivery = deliveryResult.rows[0];
   const items = await client.query(`select * from public.order_items where order_id=$1 order by id for update`, [order.id]);
+  await lockInventoryProducts(client, order.organization_id, items.rows.map((item: any) => Number(item.product_id)));
   let deliveredTotal = 0;
 
   for (const item of items.rows) {
@@ -220,6 +232,11 @@ async function deliverAll(client: any, order: OrderRow, userId: string) {
         left join public.inventory_cartons c on c.id=a.carton_id
        where a.order_item_id=$1 and a.status='picked' order by l.best_before,l.id for update of a
     `, [item.id]);
+    await lockInventoryLots(client, order.organization_id, allocations.rows.map((allocation: any) => Number(allocation.lot_id)));
+    await lockInventoryProductLocations(client, order.organization_id, allocations.rows.map((allocation: any) => ({
+      productId: Number(item.product_id),
+      locationId: Number(allocation.location_id ?? locationId)
+    })));
     const deliveredUnits = allocations.rows.reduce((sum: number, row: any) => sum + Number(row.quantity_units), 0);
     if (deliveredUnits <= 0) continue;
     if (deliveredUnits % Number(item.units_per_carton_snapshot) !== 0) {

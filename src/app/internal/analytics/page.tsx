@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/PageHeader";
 import { query } from "@/lib/db";
 import { money } from "@/lib/format";
+import { requireAppUser } from "@/lib/auth";
 
 function numberHU(value: number | string | null | undefined) {
   return new Intl.NumberFormat("hu-HU").format(Number(value ?? 0));
@@ -11,13 +12,14 @@ function percent(value: number | string | null | undefined) {
 }
 
 export default async function AnalyticsPage() {
+  const user = await requireAppUser(["admin", "management", "finance"]);
   const [summary] = await query<any>(`
     with delivered as (
       select d.id,d.delivered_at,di.gross_amount_huf,di.net_amount_huf,di.cogs_huf,di.delivered_units,d.order_id,o.partner_id
         from public.delivery_items di
         join public.deliveries d on d.id=di.delivery_id and d.status='delivered'
         join public.orders o on o.id=d.order_id
-       where d.archived_at is null
+       where d.organization_id=$1 and d.archived_at is null
     ), current_month as (
       select coalesce(sum(gross_amount_huf),0) gross, coalesce(sum(net_amount_huf),0) net, coalesce(sum(cogs_huf),0) cogs, coalesce(sum(delivered_units),0) units
         from delivered
@@ -34,14 +36,14 @@ export default async function AnalyticsPage() {
       (select cogs from current_month)::bigint as month_cogs,
       ((select gross from current_month)-(select cogs from current_month))::bigint as month_margin,
       (select units from current_month)::int as month_units,
-      (select count(*) from public.orders where archived_at is null and created_at >= date_trunc('month', now()))::int as month_orders,
-      (select count(*) from public.partners where archived_at is null and active=true)::int as active_partners,
-      (select coalesce(sum(outstanding_huf),0) from public.v_receivables_open)::bigint as outstanding,
-      (select coalesce(sum(outstanding_huf),0) from public.v_receivables_open where status='overdue')::bigint as overdue,
+      (select count(*) from public.orders where organization_id=$1 and archived_at is null and created_at >= date_trunc('month', now()))::int as month_orders,
+      (select count(*) from public.partners where organization_id=$1 and archived_at is null and active=true)::int as active_partners,
+      (select coalesce(sum(v.outstanding_huf),0) from public.v_receivables_open v join public.orders o on o.id=v.order_id where o.organization_id=$1)::bigint as outstanding,
+      (select coalesce(sum(v.outstanding_huf),0) from public.v_receivables_open v join public.orders o on o.id=v.order_id where o.organization_id=$1 and v.status='overdue')::bigint as overdue,
       case when (select gross from previous_month)>0
         then round((((select gross from current_month)-(select gross from previous_month))::numeric/(select gross from previous_month))*100,1)
         else null end as month_growth_percent
-  `);
+  `, [user.organization_id]);
 
   const trend = await query<any>(`
     select to_char(month_start,'YYYY. MM.') as month_label,
@@ -49,11 +51,11 @@ export default async function AnalyticsPage() {
            coalesce(sum(di.delivered_units),0)::int as units,
            count(distinct d.order_id)::int as orders
       from generate_series(date_trunc('month', now()) - interval '5 month', date_trunc('month', now()), interval '1 month') month_start
-      left join public.deliveries d on d.status='delivered' and d.archived_at is null and date_trunc('month', d.delivered_at)=month_start
+      left join public.deliveries d on d.organization_id=$1 and d.status='delivered' and d.archived_at is null and date_trunc('month', d.delivered_at)=month_start
       left join public.delivery_items di on di.delivery_id=d.id
      group by month_start
      order by month_start
-  `);
+  `, [user.organization_id]);
 
   const partners = await query<any>(`
     with partner_revenue as (
@@ -61,11 +63,11 @@ export default async function AnalyticsPage() {
              coalesce(sum(di.gross_amount_huf),0)::bigint as revenue,
              coalesce(sum(di.delivered_units),0)::int as units,
              count(distinct d.order_id)::int as orders
-        from public.partners p
-        left join public.orders o on o.partner_id=p.id and o.archived_at is null
+       from public.partners p
+        left join public.orders o on o.partner_id=p.id and o.organization_id=p.organization_id and o.archived_at is null
         left join public.deliveries d on d.order_id=o.id and d.status='delivered' and d.archived_at is null
         left join public.delivery_items di on di.delivery_id=d.id
-       where p.archived_at is null
+       where p.organization_id=$1 and p.archived_at is null
        group by p.id,p.name
     ), total as (
       select nullif(sum(revenue),0) as revenue from partner_revenue
@@ -75,7 +77,7 @@ export default async function AnalyticsPage() {
       from partner_revenue pr,total
      order by pr.revenue desc
      limit 10
-  `);
+  `, [user.organization_id]);
 
   const products = await query<any>(`
     with product_revenue as (
@@ -86,7 +88,7 @@ export default async function AnalyticsPage() {
         from public.delivery_items di
         join public.order_items oi on oi.id=di.order_item_id
         join public.deliveries d on d.id=di.delivery_id and d.status='delivered'
-       where d.archived_at is null
+       where d.organization_id=$1 and d.archived_at is null
        group by oi.product_name_snapshot
     ), total as (
       select nullif(sum(revenue),0) as revenue from product_revenue
@@ -96,7 +98,7 @@ export default async function AnalyticsPage() {
       from product_revenue pr,total
      order by pr.revenue desc
      limit 10
-  `);
+  `, [user.organization_id]);
 
   const receivables = await query<any>(`
     select p.name,
@@ -104,19 +106,21 @@ export default async function AnalyticsPage() {
            coalesce(sum(v.outstanding_huf) filter(where v.status='overdue'),0)::bigint as overdue
       from public.v_receivables_open v
       join public.partners p on p.id=v.partner_id
+     where p.organization_id=$1
      group by p.name
      order by outstanding desc
      limit 10
-  `);
+  `, [user.organization_id]);
 
   const stockRisks = await query<any>(`
     select product_name,available_units,reserved_units,minimum_stock_units,
            (available_units-minimum_stock_units)::int as surplus
-      from public.v_product_stock_summary
-     where available_units <= minimum_stock_units + 500
+      from public.v_product_stock_summary s
+      join public.products p on p.id=s.product_id
+     where p.organization_id=$1 and available_units <= minimum_stock_units + 500
      order by surplus asc, product_name
      limit 10
-  `);
+  `, [user.organization_id]);
 
   return (
     <div className="page">

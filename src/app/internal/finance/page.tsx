@@ -2,32 +2,41 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { query, one } from "@/lib/db";
 import { dateHU, money } from "@/lib/format";
+import { requireAppUser } from "@/lib/auth";
 import { expenseStatusLabels, financeStatusLabels, huLabel } from "@/lib/status";
 import { FinanceEntryForms } from "./FinanceEntryForms";
 
 export default async function FinancePage() {
+  const user = await requireAppUser(["admin", "management", "finance"]);
   const totals = await one<any>(`
     select
-      (select coalesce(sum(gross_amount_huf),0) from public.receivables where status<>'void' and archived_at is null) as revenue,
-      (select coalesce(sum(outstanding_huf),0) from public.v_receivables_open) as outstanding,
-      (select coalesce(sum(outstanding_huf),0) from public.v_receivables_open where due_date < current_date) as overdue,
-      (select coalesce(sum(amount_huf),0) from public.payments where archived_at is null) as received,
-      (select coalesce(sum(gross_amount_huf),0) from public.expenses where status <> 'void' and archived_at is null) as expenses,
-      (select coalesce(sum(cogs_huf),0) from public.delivery_items di join public.deliveries d on d.id=di.delivery_id where d.status='delivered' and d.archived_at is null) as cogs,
-      (select coalesce(sum(outstanding_huf),0) from public.v_member_loan_balances) as member_loans
-  `);
-  const receivables = await query<any>(`select * from public.v_receivables_open order by due_date, id limit 250`);
-  const categories = await query<any>(`select id,name from public.expense_categories where active order by name`);
+      (select coalesce(sum(gross_amount_huf),0) from public.receivables where organization_id=$1 and status<>'void' and archived_at is null) as revenue,
+      (select coalesce(sum(v.outstanding_huf),0) from public.v_receivables_open v join public.orders o on o.id=v.order_id where o.organization_id=$1) as outstanding,
+      (select coalesce(sum(v.outstanding_huf),0) from public.v_receivables_open v join public.orders o on o.id=v.order_id where o.organization_id=$1 and v.due_date < current_date) as overdue,
+      (select coalesce(sum(amount_huf),0) from public.payments where organization_id=$1 and archived_at is null) as received,
+      (select coalesce(sum(gross_amount_huf),0) from public.expenses where organization_id=$1 and status <> 'void' and archived_at is null) as expenses,
+      (select coalesce(sum(cogs_huf),0) from public.delivery_items di join public.deliveries d on d.id=di.delivery_id where d.organization_id=$1 and d.status='delivered' and d.archived_at is null) as cogs,
+      (select coalesce(sum(outstanding_huf),0) from public.v_member_loan_balances where organization_id=$1) as member_loans
+  `, [user.organization_id]);
+  const receivables = await query<any>(`
+    select v.*
+      from public.v_receivables_open v
+      join public.orders o on o.id=v.order_id
+     where o.organization_id=$1
+     order by v.due_date, v.id
+     limit 250
+  `, [user.organization_id]);
+  const categories = await query<any>(`select id,name from public.expense_categories where organization_id=$1 and active order by name`, [user.organization_id]);
   const expenses = await query<any>(`
     select e.*, ec.name as category_name
       from public.expenses e left join public.expense_categories ec on ec.id=e.category_id
-     where e.status <> 'void' and e.archived_at is null order by e.performance_date desc,e.id desc limit 100
-  `);
+     where e.organization_id=$1 and e.status <> 'void' and e.archived_at is null order by e.performance_date desc,e.id desc limit 100
+  `, [user.organization_id]);
   const loans = await query<any>(`
     select * from public.member_loan_transactions
-     where archived_at is null order by transaction_date desc,id desc limit 100
-  `);
-  const loanBalances = await query<any>(`select * from public.v_member_loan_balances order by member_name`);
+     where organization_id=$1 and archived_at is null order by transaction_date desc,id desc limit 100
+  `, [user.organization_id]);
+  const loanBalances = await query<any>(`select * from public.v_member_loan_balances where organization_id=$1 order by member_name`, [user.organization_id]);
   const t = totals ?? {revenue:0,outstanding:0,overdue:0,received:0,expenses:0,cogs:0,member_loans:0};
   const margin = Number(t.revenue)-Number(t.cogs);
   const result = margin-Number(t.expenses);

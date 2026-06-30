@@ -2,15 +2,22 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { query } from "@/lib/db";
 import { apiError } from "@/lib/http";
+import { enforceRateLimits, RATE_LIMITS, rateLimitOption, requestIp } from "@/lib/rate-limit";
 
 const schema = z.object({
   email: z.string().email()
 });
 
 export async function POST(request: Request) {
+  const ip = requestIp(request);
   try {
     const input = schema.parse(await request.json());
     const email = input.email.trim().toLowerCase();
+    const limited = await enforceRateLimits([
+      rateLimitOption(RATE_LIMITS.passwordResetIp, ip),
+      rateLimitOption(RATE_LIMITS.passwordResetEmail, email)
+    ]);
+    if (limited) return limited;
     const partners = await query<{ id: number; name: string; organization_id: number; email: string }>(`
       select p.id,p.name,p.organization_id,au.email
         from public.app_users au
@@ -37,6 +44,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return apiError(error, "A jelszó-visszaállítási kérés beküldése sikertelen.");
+    return apiError(error, "A jelszó-visszaállítási kérés beküldése sikertelen.", { route: "/api/auth/password-reset-request", ip });
   }
 }

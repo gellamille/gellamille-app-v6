@@ -23,7 +23,8 @@ export default async function RecallsPage({ searchParams }: { searchParams?: Pro
       join public.order_items oi on oi.id=a.order_item_id
       join public.orders o on o.id=oi.order_id
      where oi.order_id=$1 and o.archived_at is null
-  `, [orderId]) : [];
+       and o.organization_id=$2
+  `, [orderId, user.organization_id]) : [];
   const lots = await query<any>(`
     select l.id,l.lot_number,l.best_before,l.status,p.name as product_name,
            coalesce(v.available_units,0)::int as available_units
@@ -56,6 +57,7 @@ export default async function RecallsPage({ searchParams }: { searchParams?: Pro
      where a.lot_id=any($1::bigint[])
        and a.status='delivered'
        and l.organization_id=$2
+       and o.organization_id=$2
        and o.archived_at is null
      group by a.lot_id,p.name,p.email,o.order_number,coalesce(d.delivered_at,a.delivered_at),concat_ws(', ',pa.postal_code,pa.city,pa.address_line1)
      order by p.name,o.order_number

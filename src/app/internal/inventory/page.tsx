@@ -58,10 +58,12 @@ export default async function InventoryPage({ searchParams }: { searchParams?: P
   };
 
   const products = await query<any>(`
-    select *
+    select s.*
       from public.v_product_stock_summary
-     order by size_ml, sort_order, product_code
-  `);
+      join public.products p on p.id=s.product_id
+     where p.organization_id=$1 and p.archived_at is null
+     order by s.size_ml, s.sort_order, s.product_code
+  `, [user.organization_id]);
 
   const lots = await query<any>(`
     select l.id, l.lot_number, l.best_before, l.status,
@@ -73,17 +75,18 @@ export default async function InventoryPage({ searchParams }: { searchParams?: P
            coalesce(c.available_carton_count,0)::int as available_carton_count,
            coalesce(c.allocated_carton_count,0)::int as allocated_carton_count
       from public.lots l
-      join public.products p on p.flavor_code = l.flavor_code and p.size_ml = l.size_ml
+      join public.products p on p.flavor_code = l.flavor_code and p.size_ml = l.size_ml and p.organization_id=l.organization_id
       left join public.v_lot_stock_summary v on v.lot_id = l.id
       left join public.v_lot_carton_summary c on c.lot_id = l.id
-     where l.archived_at is null
+     where l.organization_id=$1
+       and l.archived_at is null
        and (
          l.status in ('active','depleted')
          or (l.status in ('recalled','scrapped','expired') and coalesce(v.physical_units,0) <> 0)
        )
      order by l.best_before, l.id
      limit 250
-  `);
+  `, [user.organization_id]);
   const correctionLots = canAdjust ? await query<any>(`
     select l.id,l.lot_number,p.name as product_name,coalesce(v.physical_units,0)::int as physical_units,
            coalesce((
@@ -97,13 +100,14 @@ export default async function InventoryPage({ searchParams }: { searchParams?: P
                ) balances
            ),'{}'::jsonb) as location_balances
       from public.lots l
-      join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml
+      join public.products p on p.flavor_code=l.flavor_code and p.size_ml=l.size_ml and p.organization_id=l.organization_id
       left join public.v_lot_stock_summary v on v.lot_id=l.id
-     where l.status='active'
+     where l.organization_id=$1
+       and l.status='active'
        and l.archived_at is null
      order by l.best_before,l.id
-  `) : [];
-  const locations = canAdjust ? await query<any>(`select id,name from public.inventory_locations where active order by name`) : [];
+  `, [user.organization_id]) : [];
+  const locations = canAdjust ? await query<any>(`select id,name from public.inventory_locations where organization_id=$1 and active order by name`, [user.organization_id]) : [];
   const movementValues: unknown[] = [user.organization_id];
   const movementWhere = ["im.organization_id=$1", "im.archived_at is null"];
 

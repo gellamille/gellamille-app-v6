@@ -24,18 +24,18 @@ export default async function MaterialsPage() {
       from public.materials m
       join public.units u on u.id=m.base_unit_id
       left join public.v_material_stock v on v.material_id=m.id
-     where m.archived_at is null
+     where m.organization_id=$1 and m.archived_at is null
      order by m.category, m.name
-  `);
+  `, [user.organization_id]);
   const units = await query<any>(`select id,code,name from public.units order by case code when 'g' then 1 when 'ml' then 2 else 9 end, code`);
   const recipeUnits = units.filter((unit) => ["g", "ml"].includes(unit.code));
   const products = await query<any>(`
     select p.id,p.name,p.sku,p.size_ml,f.name as flavor_name
       from public.products p
       join public.flavors f on f.code=p.flavor_code
-     where p.active=true and p.archived_at is null
+     where p.organization_id=$1 and p.active=true and p.archived_at is null
      order by p.size_ml,p.sort_order,p.name
-  `);
+  `, [user.organization_id]);
   const recipes = await query<any>(`
     select rv.id, p.name as product_name, p.size_ml, rv.version_no, rv.status, rv.effective_from,
            rv.nutrition_calories_kcal_per_100g,
@@ -50,9 +50,10 @@ export default async function MaterialsPage() {
       left join public.recipe_components rc on rc.recipe_version_id=rv.id
       left join public.materials m on m.id=rc.material_id
       left join public.units u on u.id=rc.unit_id
+     where r.organization_id=$1 and p.organization_id=$1
      group by rv.id,p.name,p.size_ml
      order by p.name,p.size_ml,rv.version_no desc
-  `);
+  `, [user.organization_id]);
   return (
     <div className="page">
       <PageHeader title="Alapanyagok és receptek" description="Alapanyag törzs és verziózott receptúra. A recept módosítása új verzióként, auditnaplóval mentődik." />

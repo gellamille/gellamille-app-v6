@@ -8,7 +8,12 @@ import { huLabel, orderStatusLabels } from "@/lib/status";
 
 export default async function PartnerOrdersPage() {
   const user = await requireAppUser(["partner"]);
-  const orders = await query<any>(`select * from public.orders where partner_id=$1 and archived_at is null order by created_at desc`, [user.partner_id]);
+  const orders = await query<any>(`
+    select *
+      from public.orders
+     where partner_id=$1 and organization_id=$2 and archived_at is null
+     order by created_at desc
+  `, [user.partner_id, user.organization_id]);
   return (
     <div>
       <PageHeader title="Rendeléseim" />

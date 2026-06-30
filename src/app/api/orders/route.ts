@@ -4,6 +4,7 @@ import { apiUser } from "@/lib/api-auth";
 import { apiError } from "@/lib/http";
 import { query, transaction } from "@/lib/db";
 import { dateWithWeekdayHU, money } from "@/lib/format";
+import { enforceRateLimits, RATE_LIMITS, rateLimitOption, requestIp } from "@/lib/rate-limit";
 
 const itemSchema = z.object({
   productId: z.number().int().positive(),
@@ -20,10 +21,17 @@ const orderSchema = z.object({
   items: z.array(itemSchema).min(1)
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await apiUser(["admin", "management", "staff", "sales", "warehouse", "finance", "partner"]);
   if (auth.error || !auth.user) return auth.error ?? NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
   const user = auth.user;
+  if (user.role === "partner") {
+    const limited = await enforceRateLimits([
+      rateLimitOption(RATE_LIMITS.partnerApiUser, user.user_id),
+      rateLimitOption(RATE_LIMITS.partnerApiIp, requestIp(request))
+    ]);
+    if (limited) return limited;
+  }
   const values: unknown[] = [user.organization_id];
   let partnerFilter = "";
   if (user.role === "partner") {
@@ -43,6 +51,13 @@ export async function POST(request: Request) {
   const auth = await apiUser(["admin", "management", "sales", "partner"]);
   if (auth.error || !auth.user) return auth.error ?? NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
   const user = auth.user;
+  if (user.role === "partner") {
+    const limited = await enforceRateLimits([
+      rateLimitOption(RATE_LIMITS.partnerApiIp, requestIp(request)),
+      rateLimitOption(RATE_LIMITS.partnerOrderSubmit, String(user.partner_id ?? user.user_id))
+    ]);
+    if (limited) return limited;
+  }
 
   try {
     const input = orderSchema.parse(await request.json());
@@ -222,7 +237,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    return apiError(error, "A rendelés mentése sikertelen.");
+    return apiError(error, "A rendelés mentése sikertelen.", { route: "/api/orders", userId: user.user_id, role: user.role });
   }
 }
 

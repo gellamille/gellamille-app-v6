@@ -14,11 +14,13 @@ export default async function PartnerSupportTicketPage({ params }: { params: Pro
   const user = await requireAppUser(["partner"]);
   if (!(await supportTablesReady())) notFound();
   const { id } = await params;
+  const ticketId = Number(id);
+  if (!Number.isInteger(ticketId) || ticketId <= 0) notFound();
   const ticket = await one<any>(`
     select *
       from public.support_tickets
      where id=$1 and partner_id=$2 and organization_id=$3 and archived_at is null
-  `, [Number(id), user.partner_id, user.organization_id]);
+  `, [ticketId, user.partner_id, user.organization_id]);
   if (!ticket) notFound();
 
   const messages = await query<any>(`

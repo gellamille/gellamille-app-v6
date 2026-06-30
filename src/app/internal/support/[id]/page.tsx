@@ -15,13 +15,15 @@ export default async function InternalSupportTicketPage({ params }: { params: Pr
   const user = await requireAppUser(["admin", "management", "staff", "sales", "finance"]);
   if (!(await supportTablesReady())) notFound();
   const { id } = await params;
+  const ticketId = Number(id);
+  if (!Number.isInteger(ticketId) || ticketId <= 0) notFound();
   const ticket = await one<any>(`
     select st.*, p.name as partner_name, p.email as partner_email, p.phone as partner_phone, au.display_name as assignee_name
       from public.support_tickets st
       join public.partners p on p.id=st.partner_id
       left join public.app_users au on au.user_id=st.assigned_to
      where st.id=$1 and st.organization_id=$2 and st.archived_at is null
-  `, [Number(id), user.organization_id]);
+  `, [ticketId, user.organization_id]);
   if (!ticket) notFound();
 
   const messages = await query<any>(`
