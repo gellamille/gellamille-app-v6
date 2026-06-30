@@ -3,11 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   Boxes, ClipboardList, Factory, LayoutDashboard, Truck,
   WalletCards, Users, ListTodo, FlaskConical, ChartNoAxesCombined,
   Settings, LogOut, IceCreamBowl, AlertTriangle, ScanBarcode, ArrowRightLeft,
-  BriefcaseBusiness, Warehouse, Store, ShieldCheck, FileText, LifeBuoy
+  BriefcaseBusiness, Warehouse, Store, ShieldCheck, FileText, LifeBuoy, Menu, X
 } from "lucide-react";
 
 const navGroups = [
@@ -58,6 +59,7 @@ const navGroups = [
 
 export function InternalNav({ role, submittedOrders = 0, openSupportTickets = 0 }: { role: string; submittedOrders?: number; openSupportTickets?: number }) {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const groups = navGroups
     .map((group) => ({
       ...group,
@@ -65,38 +67,64 @@ export function InternalNav({ role, submittedOrders = 0, openSupportTickets = 0 
     }))
     .filter((group) => group.items.length > 0);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    document.body.classList.toggle("mobile-nav-open", mobileOpen);
+    return () => document.body.classList.remove("mobile-nav-open");
+  }, [mobileOpen]);
+
   return (
-    <aside className="sidebar">
-      <Link href="/internal" className="brand internal-brand">
-        <Image className="internal-logo-image" src="/gellamille-logo.png" alt="Gellamille" width={3956} height={1062} priority />
-      </Link>
-      <nav>
-        {groups.map((group) => (
-          <details className="nav-group" key={group.title} open>
-            <summary className="nav-group-title"><group.Icon size={17} /><span>{group.title}</span></summary>
-            <div className="nav-submenu">
-              {group.items.map(([href, label, Icon]) => {
-                const exact = pathname === href;
-                const nested = href !== "/internal" && pathname.startsWith(`${href}/`);
-                const hasMoreSpecificMatch = group.items.some(([otherHref]) => (
-                  otherHref !== href &&
-                  otherHref.startsWith(`${href}/`) &&
-                  (pathname === otherHref || pathname.startsWith(`${otherHref}/`))
-                ));
-                const isActive = exact || (nested && !hasMoreSpecificMatch);
-                return (
-                  <Link className={isActive ? "is-active" : undefined} href={href} key={href} aria-current={isActive ? "page" : undefined}>
-                    <Icon size={17} /><span>{label}</span>{href === "/internal/orders" && submittedOrders > 0 ? <span className="nav-badge">{submittedOrders}</span> : null}{href === "/internal/support" && openSupportTickets > 0 ? <span className="nav-badge">{openSupportTickets}</span> : null}
-                  </Link>
-                );
-              })}
-            </div>
-          </details>
-        ))}
-      </nav>
-      <form action="/api/auth/signout" method="post" className="sidebar-bottom">
-        <button className="nav-button" type="submit"><LogOut size={18} /> Kilépés</button>
-      </form>
-    </aside>
+    <>
+      <button
+        className="mobile-menu-button"
+        type="button"
+        aria-label={mobileOpen ? "Menü bezárása" : "Menü megnyitása"}
+        aria-expanded={mobileOpen}
+        onClick={() => setMobileOpen((open) => !open)}
+      >
+        {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+      </button>
+      <button
+        className={`mobile-nav-backdrop${mobileOpen ? " is-open" : ""}`}
+        type="button"
+        aria-label="Menü bezárása"
+        onClick={() => setMobileOpen(false)}
+      />
+      <aside className={`sidebar${mobileOpen ? " is-mobile-open" : ""}`}>
+        <Link href="/internal" className="brand internal-brand">
+          <Image className="internal-logo-image" src="/gellamille-logo.png" alt="Gellamille" width={3956} height={1062} priority />
+        </Link>
+        <nav>
+          {groups.map((group) => (
+            <details className="nav-group" key={group.title} open>
+              <summary className="nav-group-title"><group.Icon size={17} /><span>{group.title}</span></summary>
+              <div className="nav-submenu">
+                {group.items.map(([href, label, Icon]) => {
+                  const exact = pathname === href;
+                  const nested = href !== "/internal" && pathname.startsWith(`${href}/`);
+                  const hasMoreSpecificMatch = group.items.some(([otherHref]) => (
+                    otherHref !== href &&
+                    otherHref.startsWith(`${href}/`) &&
+                    (pathname === otherHref || pathname.startsWith(`${otherHref}/`))
+                  ));
+                  const isActive = exact || (nested && !hasMoreSpecificMatch);
+                  return (
+                    <Link className={isActive ? "is-active" : undefined} href={href} key={href} aria-current={isActive ? "page" : undefined}>
+                      <Icon size={17} /><span>{label}</span>{href === "/internal/orders" && submittedOrders > 0 ? <span className="nav-badge">{submittedOrders}</span> : null}{href === "/internal/support" && openSupportTickets > 0 ? <span className="nav-badge">{openSupportTickets}</span> : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            </details>
+          ))}
+        </nav>
+        <form action="/api/auth/signout" method="post" className="sidebar-bottom">
+          <button className="nav-button" type="submit"><LogOut size={18} /> Kilépés</button>
+        </form>
+      </aside>
+    </>
   );
 }

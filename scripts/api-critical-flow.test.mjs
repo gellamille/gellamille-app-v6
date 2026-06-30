@@ -152,6 +152,15 @@ describe("kritikus API jogosultsagi es folyamat invariantok", () => {
     assertContains("src/app/api/health/route.ts", "monitoringStatus()");
   });
 
+  it("internal mobile layout uses hamburger drawer instead of inline sidebar", () => {
+    assertContains("src/components/InternalNav.tsx", "mobile-menu-button");
+    assertContains("src/components/InternalNav.tsx", "mobile-nav-backdrop");
+    assertContains("src/components/InternalNav.tsx", "is-mobile-open");
+    assertContains("src/app/globals.css", "transform: translateX(-105%)");
+    assertContains("src/app/globals.css", ".sidebar.is-mobile-open");
+    assertContains("src/app/globals.css", "max-width: 100vw");
+  });
+
   it("inventory write flows use transaction-scoped advisory locks for race-sensitive balances", () => {
     assertContains("src/lib/inventory-locks.ts", "pg_advisory_xact_lock");
     assertContains("src/lib/inventory-locks.ts", "lockInventoryProducts");
