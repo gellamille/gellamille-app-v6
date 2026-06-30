@@ -213,10 +213,14 @@ export default async function BillingPage({ searchParams }: { searchParams?: Pro
 }
 
 async function billingSchemaReady() {
-  const result = await query<{ exists: boolean }>(`
-    select to_regclass('public.billing_documents') is not null as exists
+  const result = await query<{ ready: boolean }>(`
+    select to_regclass('public.billing_documents') is not null
+       and to_regclass('public.billing_document_items') is not null
+       and to_regclass('public.billing_events') is not null
+       and to_regclass('public.billing_provider_settings') is not null
+       and to_regclass('public.billing_provider_messages') is not null as ready
   `);
-  return result[0]?.exists === true;
+  return result[0]?.ready === true;
 }
 
 function BillingIntegrationNotes() {

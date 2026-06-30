@@ -228,6 +228,29 @@ textarea { min-height: 95px; resize: vertical; }
 .alert-success { background: #e7f3eb; color: #2f6e4a; border: 1px solid #cce4d5; }
 
 .empty-state { padding: 36px; text-align: center; color: var(--muted); border: 1px dashed #ccd3ce; border-radius: 12px; background: rgba(255,255,255,.6); }
+.error-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.error-panel {
+  width: min(620px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+.error-panel h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0; }
+.error-panel p { margin: 0 0 16px; color: var(--muted); line-height: 1.45; }
+.error-kicker {
+  color: var(--danger) !important;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.error-digest {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .kv { display: grid; grid-template-columns: 150px 1fr; gap: 8px 16px; font-size: 13px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; font-weight: 650; }
