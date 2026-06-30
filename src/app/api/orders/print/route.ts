@@ -52,6 +52,13 @@ function addFilter(where: string[], values: unknown[], clause: string, value: un
   where.push(clause.replace("?", `$${values.length}`));
 }
 
+function productLabel(item: Pick<ItemRow, "product_name" | "size_ml">) {
+  const name = item.product_name.trim();
+  if (!item.size_ml) return name;
+  const size = `${item.size_ml} ml`;
+  return name.toLowerCase().includes(size.toLowerCase()) ? name : `${name} ${size}`;
+}
+
 async function selectedOrders(organizationId: number, url: URL) {
   const ids = parseIds(url);
   const selectedMode = url.searchParams.get("mode") === "selected";
@@ -157,12 +164,20 @@ function generatePdf(orders: OrderRow[], items: ItemRow[]) {
     };
 
     const now = new Date();
-    doc.font("Helvetica-Bold").fontSize(17).text(safeText("Összevont rendelési összesítő"), left, doc.y, { width: tableWidth });
+    const singleOrder = orders.length === 1 ? orders[0] : null;
+    doc.font("Helvetica-Bold").fontSize(17).text(safeText(singleOrder ? "Rendelés nyomtatása" : "Összevont rendelési összesítő"), left, doc.y, { width: tableWidth });
     doc.font("Helvetica").fontSize(9).fillColor("#555").text(`Generalva: ${dateHU(now)} ${now.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}`);
     doc.moveDown(0.6).fillColor("#111");
-    doc.fontSize(10).text(`Rendelesek: ${orders.length} db`);
-    doc.text(`Osszes karton: ${orders.reduce((sum, order) => sum + Number(order.total_cartons ?? 0), 0)} karton`);
-    doc.text(`Osszes darab: ${orders.reduce((sum, order) => sum + Number(order.total_units ?? 0), 0)} db`);
+    doc.fontSize(10);
+    if (singleOrder) {
+      doc.text(safeText(`${singleOrder.order_number} - ${singleOrder.partner_name}`));
+      doc.text(safeText(`Kert nap: ${dateHU(singleOrder.requested_delivery_date)} | Karton: ${singleOrder.total_cartons} | Darab: ${singleOrder.total_units}`));
+      if (singleOrder.delivery_address) doc.text(safeText(`Cim: ${singleOrder.delivery_address}`));
+    } else {
+      doc.text(`Rendelesek: ${orders.length} db`);
+      doc.text(`Osszes karton: ${orders.reduce((sum, order) => sum + Number(order.total_cartons ?? 0), 0)} karton`);
+      doc.text(`Osszes darab: ${orders.reduce((sum, order) => sum + Number(order.total_units ?? 0), 0)} db`);
+    }
 
     const summary = new Map<string, ItemRow & { order_count: number }>();
     for (const item of items) {
@@ -179,29 +194,31 @@ function generatePdf(orders: OrderRow[], items: ItemRow[]) {
     }
 
     doc.moveDown(1);
-    doc.font("Helvetica-Bold").fontSize(13).text(safeText("Termék összesítő"), left, doc.y, { width: tableWidth });
+    doc.font("Helvetica-Bold").fontSize(13).text(safeText(singleOrder ? "Rendelt tételek" : "Termék összesítő"), left, doc.y, { width: tableWidth });
     doc.moveDown(0.3);
     drawProductHeader();
     for (const item of [...summary.values()].sort((a, b) => a.product_name.localeCompare(b.product_name, "hu"))) {
-      drawItemRow(`${item.product_name} ${item.size_ml ? `${item.size_ml} ml` : ""}`, item.cartons, item.unit_quantity, item.remaining_units);
+      drawItemRow(productLabel(item), item.cartons, item.unit_quantity, item.remaining_units);
     }
 
-    doc.moveDown(1.1);
-    ensureSpace(54);
-    doc.font("Helvetica-Bold").fontSize(13).text(safeText("Rendelésenkénti bontás"), left, doc.y, { width: tableWidth });
-    for (const order of orders) {
-      ensureSpace(64);
-      doc.moveDown(0.6);
-      doc.font("Helvetica-Bold").fontSize(10).fillColor("#111").text(safeText(`${order.order_number} - ${order.partner_name}`), left, doc.y, { width: tableWidth });
-      doc.font("Helvetica").fontSize(9).fillColor("#555")
-        .text(safeText(`Kert nap: ${dateHU(order.requested_delivery_date)} | Karton: ${order.total_cartons} | Darab: ${order.total_units}`));
-      if (order.delivery_address) doc.text(safeText(`Cim: ${order.delivery_address}`));
-      doc.fillColor("#111");
-      const orderItems = items.filter((item) => Number(item.order_id) === Number(order.id));
-      doc.moveDown(0.3);
-      drawProductHeader();
-      for (const item of orderItems) {
-        drawItemRow(`${item.product_name} ${item.size_ml ? `${item.size_ml} ml` : ""}`, item.cartons, item.unit_quantity, item.remaining_units);
+    if (!singleOrder) {
+      doc.moveDown(1.1);
+      ensureSpace(54);
+      doc.font("Helvetica-Bold").fontSize(13).text(safeText("Rendelésenkénti bontás"), left, doc.y, { width: tableWidth });
+      for (const order of orders) {
+        ensureSpace(64);
+        doc.moveDown(0.6);
+        doc.font("Helvetica-Bold").fontSize(10).fillColor("#111").text(safeText(`${order.order_number} - ${order.partner_name}`), left, doc.y, { width: tableWidth });
+        doc.font("Helvetica").fontSize(9).fillColor("#555")
+          .text(safeText(`Kert nap: ${dateHU(order.requested_delivery_date)} | Karton: ${order.total_cartons} | Darab: ${order.total_units}`));
+        if (order.delivery_address) doc.text(safeText(`Cim: ${order.delivery_address}`));
+        doc.fillColor("#111");
+        const orderItems = items.filter((item) => Number(item.order_id) === Number(order.id));
+        doc.moveDown(0.3);
+        drawProductHeader();
+        for (const item of orderItems) {
+          drawItemRow(productLabel(item), item.cartons, item.unit_quantity, item.remaining_units);
+        }
       }
     }
 
