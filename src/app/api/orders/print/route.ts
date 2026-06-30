@@ -1,4 +1,4 @@
-import PDFDocument from "pdfkit";
+import PDFDocument from "pdfkit/js/pdfkit.standalone.js";
 import { NextResponse } from "next/server";
 import { apiUser } from "@/lib/api-auth";
 import { query } from "@/lib/db";
