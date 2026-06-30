@@ -38,8 +38,14 @@ export default async function AnalyticsPage() {
       (select units from current_month)::int as month_units,
       (select count(*) from public.orders where organization_id=$1 and archived_at is null and created_at >= date_trunc('month', now()))::int as month_orders,
       (select count(*) from public.partners where organization_id=$1 and archived_at is null and active=true)::int as active_partners,
-      (select coalesce(sum(v.outstanding_huf),0) from public.v_receivables_open v join public.orders o on o.id=v.order_id where o.organization_id=$1)::bigint as outstanding,
-      (select coalesce(sum(v.outstanding_huf),0) from public.v_receivables_open v join public.orders o on o.id=v.order_id where o.organization_id=$1 and v.status='overdue')::bigint as overdue,
+      (select coalesce(sum(r.gross_amount_huf
+        + coalesce((select sum(fa.amount_huf) from public.financial_adjustments fa where fa.receivable_id=r.id and fa.archived_at is null),0)
+        - coalesce((select sum(pa.amount_huf) from public.payment_allocations pa join public.payments pay on pay.id=pa.payment_id where pa.receivable_id=r.id and pay.archived_at is null),0)),0)
+        from public.receivables r where r.organization_id=$1 and r.status<>'void' and r.archived_at is null)::bigint as outstanding,
+      (select coalesce(sum(r.gross_amount_huf
+        + coalesce((select sum(fa.amount_huf) from public.financial_adjustments fa where fa.receivable_id=r.id and fa.archived_at is null),0)
+        - coalesce((select sum(pa.amount_huf) from public.payment_allocations pa join public.payments pay on pay.id=pa.payment_id where pa.receivable_id=r.id and pay.archived_at is null),0)),0)
+        from public.receivables r where r.organization_id=$1 and r.status<>'void' and r.archived_at is null and r.due_date<current_date)::bigint as overdue,
       case when (select gross from previous_month)>0
         then round((((select gross from current_month)-(select gross from previous_month))::numeric/(select gross from previous_month))*100,1)
         else null end as month_growth_percent
@@ -73,7 +79,10 @@ export default async function AnalyticsPage() {
       select nullif(sum(revenue),0) as revenue from partner_revenue
     )
     select pr.*, round((pr.revenue::numeric / total.revenue) * 100,1) as share_percent,
-           (select coalesce(sum(v.outstanding_huf),0) from public.v_receivables_open v where v.partner_id=pr.id)::bigint as outstanding
+           (select coalesce(sum(r.gross_amount_huf
+             + coalesce((select sum(fa.amount_huf) from public.financial_adjustments fa where fa.receivable_id=r.id and fa.archived_at is null),0)
+             - coalesce((select sum(pa.amount_huf) from public.payment_allocations pa join public.payments pay on pay.id=pa.payment_id where pa.receivable_id=r.id and pay.archived_at is null),0)),0)
+             from public.receivables r where r.partner_id=pr.id and r.status<>'void' and r.archived_at is null)::bigint as outstanding
       from partner_revenue pr,total
      order by pr.revenue desc
      limit 10
@@ -102,11 +111,16 @@ export default async function AnalyticsPage() {
 
   const receivables = await query<any>(`
     select p.name,
-           coalesce(sum(v.outstanding_huf),0)::bigint as outstanding,
-           coalesce(sum(v.outstanding_huf) filter(where v.status='overdue'),0)::bigint as overdue
-      from public.v_receivables_open v
-      join public.partners p on p.id=v.partner_id
-     where p.organization_id=$1
+           coalesce(sum(r.gross_amount_huf
+             + coalesce((select sum(fa.amount_huf) from public.financial_adjustments fa where fa.receivable_id=r.id and fa.archived_at is null),0)
+             - coalesce((select sum(pa.amount_huf) from public.payment_allocations pa join public.payments pay on pay.id=pa.payment_id where pa.receivable_id=r.id and pay.archived_at is null),0)),0)::bigint as outstanding,
+           coalesce(sum(r.gross_amount_huf
+             + coalesce((select sum(fa.amount_huf) from public.financial_adjustments fa where fa.receivable_id=r.id and fa.archived_at is null),0)
+             - coalesce((select sum(pa.amount_huf) from public.payment_allocations pa join public.payments pay on pay.id=pa.payment_id where pa.receivable_id=r.id and pay.archived_at is null),0))
+             filter(where r.due_date<current_date),0)::bigint as overdue
+      from public.receivables r
+      join public.partners p on p.id=r.partner_id
+     where p.organization_id=$1 and r.status<>'void' and r.archived_at is null
      group by p.name
      order by outstanding desc
      limit 10

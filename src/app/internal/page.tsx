@@ -25,7 +25,10 @@ export default async function DashboardPage() {
       (select count(*)::int from public.orders where organization_id=$1 and fulfillment_status in ('packed','partially_delivered') and archived_at is null) as packed_orders,
       (select count(*)::int from public.v_product_stock_summary s join public.products p on p.id=s.product_id where p.organization_id=$1 and s.available_units < s.minimum_stock_units) as low_stock_products,
       (select count(*)::int from public.lots where organization_id=$1 and status = 'active' and archived_at is null) as active_lots,
-      (select coalesce(sum(v.outstanding_huf),0)::bigint from public.v_receivables_open v join public.orders o on o.id=v.order_id where o.organization_id=$1) as receivables_huf
+      (select coalesce(sum(r.gross_amount_huf
+        + coalesce((select sum(fa.amount_huf) from public.financial_adjustments fa where fa.receivable_id=r.id and fa.archived_at is null),0)
+        - coalesce((select sum(pa.amount_huf) from public.payment_allocations pa join public.payments pay on pay.id=pa.payment_id where pa.receivable_id=r.id and pay.archived_at is null),0)),0)::bigint
+        from public.receivables r where r.organization_id=$1 and r.status<>'void' and r.archived_at is null) as receivables_huf
   `, [user.organization_id]);
 
   const orders = await query<any>(`

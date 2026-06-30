@@ -14,6 +14,16 @@ const schema = z.object({
   active: z.boolean().default(true)
 });
 
+function expectedUnitsPerCarton(sizeMl: number) {
+  if (sizeMl === 150) return 20;
+  if (sizeMl === 300) return 10;
+  return null;
+}
+
+function cartonValidationMessage(sizeMl: number, expected: number) {
+  return `${sizeMl} ml-es terméknél a karton ${expected} db lehet. A kartonlogika kötött, hogy a rendelés, készlet és LOT számolás ne csússzon szét.`;
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await apiUser(["admin", "management", "production", "sales"]);
   if (auth.error || !auth.user) return auth.error ?? NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
@@ -30,6 +40,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const before = await client.query<any>(`select * from public.products where id=$1 and organization_id=$2 for update`, [productId, user.organization_id]);
       const product = before.rows[0];
       if (!product) throw new Error("A termék nem található.");
+      const expectedCarton = expectedUnitsPerCarton(Number(product.size_ml));
+      if (expectedCarton !== null && input.unitsPerCarton !== expectedCarton) {
+        throw new Error(cartonValidationMessage(Number(product.size_ml), expectedCarton));
+      }
 
       const updated = await client.query(`
         update public.products set

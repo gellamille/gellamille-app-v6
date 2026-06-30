@@ -54,6 +54,16 @@ function numberFromInput(value: string, fallback: number) {
   return Number.isFinite(next) ? next : fallback;
 }
 
+function expectedUnitsPerCarton(sizeMl: number) {
+  if (sizeMl === 150) return 20;
+  if (sizeMl === 300) return 10;
+  return null;
+}
+
+function cartonValidationMessage(sizeMl: number, expected: number) {
+  return `${sizeMl} ml-es terméknél a karton ${expected} db lehet. A kartonlogika kötött, hogy a rendelés, készlet és LOT számolás ne csússzon szét.`;
+}
+
 export function ProductEditor({ products, canWrite }: { products: Product[]; canWrite: boolean }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -80,7 +90,12 @@ export function ProductEditor({ products, canWrite }: { products: Product[]; can
   }
 
   async function saveProduct(productId: number) {
+    const product = products.find((item) => item.id === productId);
     const draft = drafts[productId];
+    const expectedCarton = product ? expectedUnitsPerCarton(Number(product.size_ml)) : null;
+    if (expectedCarton !== null && draft.unitsPerCarton !== expectedCarton) {
+      throw new Error(cartonValidationMessage(Number(product?.size_ml), expectedCarton));
+    }
     setLoadingIds((current) => new Set(current).add(productId));
     setMessage("");
     const response = await fetch(`/api/products/${productId}`, {
@@ -109,7 +124,7 @@ export function ProductEditor({ products, canWrite }: { products: Product[]; can
       setMessage("A termék módosítva. A változás csak jövőbeli rendelésekre érvényes.");
       router.refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "A termék mentése sikertelen.");
+      setMessage(`Hiba: ${error instanceof Error ? error.message : "A termék mentése sikertelen."}`);
     }
   }
 
@@ -121,13 +136,13 @@ export function ProductEditor({ products, canWrite }: { products: Product[]; can
       setMessage(`${ids.length} termék módosítása mentve. A változások csak jövőbeli rendelésekre érvényesek.`);
       router.refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "A termékek mentése sikertelen.");
+      setMessage(`Hiba: ${error instanceof Error ? error.message : "A termékek mentése sikertelen."}`);
     }
   }
 
   return (
     <div className="stack">
-      {message ? <div className={message.includes("sikertelen") ? "alert alert-danger" : "alert alert-success"}>{message}</div> : null}
+      {message ? <div className={message.startsWith("Hiba:") ? "alert alert-danger" : "alert alert-success"}>{message}</div> : null}
       {canWrite ? (
         <div className="card-title-row">
           <div className="text-muted">{dirtyCount ? `${dirtyCount} nem mentett termékmódosítás` : "Nincs nem mentett módosítás"}</div>
@@ -139,12 +154,13 @@ export function ProductEditor({ products, canWrite }: { products: Product[]; can
           const draft = drafts[product.id] ?? draftFromProduct(product);
           const loading = loadingIds.has(product.id);
           const dirty = dirtyIds.has(product.id);
+          const expectedCarton = expectedUnitsPerCarton(Number(product.size_ml));
           return (
             <tr key={product.id}>
               <td className="mono">{product.sku ?? `GM-${product.flavor_code}-${product.size_ml}`}</td>
               <td>{canWrite ? <input value={draft.name} onChange={(event) => updateDraft(product.id, { name: event.target.value })} required /> : draft.name}</td>
               <td>{product.size_ml} ml</td>
-              <td>{canWrite ? <input type="number" min="1" value={draft.unitsPerCarton} onChange={(event) => updateDraft(product.id, { unitsPerCarton: numberFromInput(event.target.value, draft.unitsPerCarton) })} required /> : `${draft.unitsPerCarton} db`}</td>
+              <td>{canWrite ? <input type="number" min="1" value={draft.unitsPerCarton} disabled={expectedCarton !== null} title={expectedCarton !== null ? cartonValidationMessage(product.size_ml, expectedCarton) : undefined} onChange={(event) => updateDraft(product.id, { unitsPerCarton: numberFromInput(event.target.value, draft.unitsPerCarton) })} required /> : `${draft.unitsPerCarton} db`}</td>
               <td>{canWrite ? <input type="number" min="1" value={draft.netUnitPriceHuf} onChange={(event) => updateDraft(product.id, { netUnitPriceHuf: numberFromInput(event.target.value, draft.netUnitPriceHuf) })} required /> : draft.netUnitPriceHuf}</td>
               <td>{canWrite ? <input type="number" min="0" value={draft.purchaseUnitPriceHuf} onChange={(event) => updateDraft(product.id, { purchaseUnitPriceHuf: numberFromInput(event.target.value, draft.purchaseUnitPriceHuf) })} required /> : draft.purchaseUnitPriceHuf}</td>
               <td>{canWrite ? <input type="number" min="0" value={draft.minimumStockUnits} onChange={(event) => updateDraft(product.id, { minimumStockUnits: numberFromInput(event.target.value, draft.minimumStockUnits) })} required /> : draft.minimumStockUnits}</td>
