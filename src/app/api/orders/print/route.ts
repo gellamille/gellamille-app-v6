@@ -172,7 +172,10 @@ function generatePdf(orders: OrderRow[], items: ItemRow[]) {
       y += 16;
     }
 
-    doc.addPage();
+    doc.y = y + 24;
+    if (doc.y > 680) {
+      doc.addPage();
+    }
     doc.font("Helvetica-Bold").fontSize(14).text(safeText("Rendelésenkénti bontás"));
     for (const order of orders) {
       if (doc.y > 710) doc.addPage();
