@@ -35,9 +35,35 @@ const eventLabels: Record<string, string> = {
   checked: "Ellenőrizve"
 };
 
-function eventDataText(value: unknown) {
-  if (!value || (typeof value === "object" && !Array.isArray(value) && !Object.keys(value).length)) return "";
-  return JSON.stringify(value, null, 2);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function formatEventDate(value: unknown) {
+  if (typeof value !== "string") return "";
+  return dateTimeHU(value);
+}
+
+function eventDataLines(value: unknown) {
+  if (!isRecord(value) || !Object.keys(value).length) return [];
+
+  const lines: string[] = [];
+  if (value.lot_id) lines.push(`LOT azonosító: ${value.lot_id}`);
+  if (value.quantity_units) lines.push(`Mennyiség: ${value.quantity_units} db`);
+  if (value.print_requested_at) lines.push(`Nyomtatás kérése: ${formatEventDate(value.print_requested_at)}`);
+  if (value.reason) lines.push(`Ok: ${value.reason}`);
+  if (value.missing_before !== undefined && value.missing_after !== undefined) {
+    lines.push(`Hiány: ${value.missing_before} db -> ${value.missing_after} db`);
+  }
+
+  const knownKeys = new Set(["lot_id", "quantity_units", "print_requested_at", "reason", "missing_before", "missing_after"]);
+  for (const [key, entry] of Object.entries(value)) {
+    if (knownKeys.has(key) || entry === null || entry === undefined) continue;
+    const label = key.replaceAll("_", " ");
+    lines.push(`${label}: ${typeof entry === "object" ? JSON.stringify(entry) : String(entry)}`);
+  }
+
+  return lines;
 }
 
 export default async function CartonDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -136,7 +162,7 @@ export default async function CartonDetailPage({ params }: { params: Promise<{ i
         <h2>Eseménynapló</h2>
         <div className="event-list">
           {events.map((event) => {
-            const dataText = eventDataText(event.event_data);
+            const dataLines = eventDataLines(event.event_data);
             return (
               <div className="event-row" key={event.id}>
                 <div>
@@ -147,7 +173,11 @@ export default async function CartonDetailPage({ params }: { params: Promise<{ i
                     <div className="text-muted">{event.from_location_name ?? "-"} - {event.to_location_name ?? "-"}</div>
                   ) : null}
                   {event.note ? <div className="text-muted">{event.note}</div> : null}
-                  {dataText ? <pre className="text-muted mono">{dataText}</pre> : null}
+                  {dataLines.length ? (
+                    <div className="event-data-lines text-muted">
+                      {dataLines.map((line) => <div key={line}>{line}</div>)}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="event-meta">
                   <strong>{event.actor_name ?? "Rendszer"}</strong>
