@@ -113,12 +113,12 @@ export default async function AnalyticsPage() {
   `, [user.organization_id]);
 
   const stockRisks = await query<any>(`
-    select product_name,available_units,reserved_units,minimum_stock_units,
-           (available_units-minimum_stock_units)::int as surplus
+    select s.product_name,s.available_units,s.reserved_units,s.minimum_stock_units,
+           (s.available_units-s.minimum_stock_units)::int as surplus
       from public.v_product_stock_summary s
       join public.products p on p.id=s.product_id
-     where p.organization_id=$1 and available_units <= minimum_stock_units + 500
-     order by surplus asc, product_name
+     where p.organization_id=$1 and s.available_units <= s.minimum_stock_units + 500
+     order by surplus asc, s.product_name
      limit 10
   `, [user.organization_id]);
 

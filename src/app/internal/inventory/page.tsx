@@ -59,7 +59,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: P
 
   const products = await query<any>(`
     select s.*
-      from public.v_product_stock_summary
+      from public.v_product_stock_summary s
       join public.products p on p.id=s.product_id
      where p.organization_id=$1 and p.archived_at is null
      order by s.size_ml, s.sort_order, s.product_code

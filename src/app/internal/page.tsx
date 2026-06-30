@@ -43,11 +43,11 @@ export default async function DashboardPage() {
   `, [user.organization_id]);
 
   const stockAlerts = await query<any>(`
-    select product_id, product_name, product_code, available_units, minimum_stock_units
+    select s.product_id, s.product_name, s.product_code, s.available_units, s.minimum_stock_units
       from public.v_product_stock_summary s
       join public.products p on p.id=s.product_id
-     where p.organization_id=$1 and available_units < minimum_stock_units
-     order by available_units, product_name
+     where p.organization_id=$1 and s.available_units < s.minimum_stock_units
+     order by s.available_units, s.product_name
      limit 8
   `, [user.organization_id]);
 
