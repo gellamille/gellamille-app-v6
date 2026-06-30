@@ -322,6 +322,7 @@ textarea { min-height: 95px; resize: vertical; }
 .label-summary-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .label-summary-row span { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; color: var(--muted); font-size: 12px; font-weight: 850; background: var(--surface-soft); }
 .label-table-wrap table { min-width: 680px; }
+.preview-card { border-color: #b8c7bd; box-shadow: 0 14px 38px rgba(31,42,37,.12); }
 .print-only-labels {
   position: fixed;
   left: -10000px;

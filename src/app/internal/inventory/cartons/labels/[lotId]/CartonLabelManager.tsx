@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Code39Barcode } from "@/components/barcode/Code39Barcode";
 import { dateHU, dateTimeHU } from "@/lib/format";
 
 type Lot = {
-  id: number;
+  id: number | string;
   lot_number: string;
   production_date: string;
   best_before: string;
@@ -20,7 +20,7 @@ type Lot = {
 };
 
 type Carton = {
-  id: number;
+  id: number | string;
   carton_code: string;
   quantity_units: number;
   status: string;
@@ -32,11 +32,12 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
   const router = useRouter();
   const unprintedCartons = useMemo(() => cartons.filter((carton) => !carton.printed_at), [cartons]);
   const printedCartons = useMemo(() => cartons.filter((carton) => carton.printed_at), [cartons]);
-  const [selectedIds, setSelectedIds] = useState<number[]>(() => unprintedCartons.map((carton) => carton.id));
+  const [selectedIds, setSelectedIds] = useState<number[]>(() => unprintedCartons.map((carton) => normalizeId(carton.id)));
   const [previewIds, setPreviewIds] = useState<number[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
+  const previewRef = useRef<HTMLElement | null>(null);
 
   const previewCartons = previewIds ? cartons.filter((carton) => previewIds.includes(normalizeId(carton.id))) : [];
 
@@ -44,22 +45,41 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
     setSelectedIds(unprintedCartons.map((carton) => normalizeId(carton.id)));
   }, [unprintedCartons]);
 
-  function toggleCarton(id: number) {
+  useEffect(() => {
+    if (!previewIds) return;
+    window.requestAnimationFrame(() => {
+      previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [previewIds]);
+
+  function previewLabels(ids: Array<number | string>) {
+    const normalizedIds = normalizeIds(ids);
+    if (!normalizedIds.length) {
+      setMessageType("error");
+      setMessage("Válassz ki legalább egy címkét az előnézethez.");
+      return;
+    }
+    setMessage("");
+    setPreviewIds(normalizedIds);
+  }
+
+  function toggleCarton(id: number | string) {
     const normalizedId = normalizeId(id);
     setSelectedIds((current) => current.includes(normalizedId) ? current.filter((value) => value !== normalizedId) : [...current, normalizedId]);
   }
 
-  function selectOnly(ids: number[]) {
+  function selectOnly(ids: Array<number | string>) {
     setSelectedIds(normalizeIds(ids));
   }
 
-  function markPrintSelection(ids: number[]) {
+  function markPrintSelection(ids: Array<number | string>) {
+    const normalizedIds = normalizeIds(ids);
     document.querySelectorAll<HTMLElement>(".carton-label[data-carton-id]").forEach((label) => {
-      label.classList.toggle("is-print-selected", ids.includes(Number(label.dataset.cartonId)));
+      label.classList.toggle("is-print-selected", normalizedIds.includes(Number(label.dataset.cartonId)));
     });
   }
 
-  async function printLabels(ids: number[]) {
+  async function printLabels(ids: Array<number | string>) {
     const normalizedIds = normalizeIds(ids);
     if (!normalizedIds.length) {
       setMessageType("error");
@@ -108,7 +128,7 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
             <p className="text-muted">A nyomtatatlan címkék alapból kijelölve indulnak. A nyomtatott címkék külön listában maradnak, onnan tudod őket újranyomtatni.</p>
           </div>
           <div className="print-actions">
-            <button className="button" type="button" onClick={() => setPreviewIds(selectedIds)} disabled={!selectedIds.length}>
+            <button className="button" type="button" onClick={() => previewLabels(selectedIds)} disabled={!selectedIds.length}>
               Kijelöltek előnézete
             </button>
             <button className="button button-primary" type="button" onClick={() => printLabels(selectedIds)} disabled={loading || !selectedIds.length}>
@@ -130,7 +150,7 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
         cartons={unprintedCartons}
         selectedIds={selectedIds}
         onToggle={toggleCarton}
-        onPreview={(id) => setPreviewIds([id])}
+        onPreview={(id) => previewLabels([id])}
         toolbar={
           <>
             <button className="button button-small" type="button" onClick={() => selectOnly(unprintedCartons.map((carton) => normalizeId(carton.id)))} disabled={!unprintedCartons.length}>Nyomtatatlanok kijelölése</button>
@@ -145,17 +165,17 @@ export function CartonLabelManager({ lot, cartons }: { lot: Lot; cartons: Carton
         cartons={printedCartons}
         selectedIds={selectedIds}
         onToggle={toggleCarton}
-        onPreview={(id) => setPreviewIds([id])}
+        onPreview={(id) => previewLabels([id])}
         toolbar={
           <>
             <button className="button button-small" type="button" onClick={() => selectOnly(printedCartons.map((carton) => normalizeId(carton.id)))} disabled={!printedCartons.length}>Nyomtatottak kijelölése</button>
-            <button className="button button-small" type="button" onClick={() => setPreviewIds(printedCartons.map((carton) => normalizeId(carton.id)))} disabled={!printedCartons.length}>Nyomtatottak előnézete</button>
+            <button className="button button-small" type="button" onClick={() => previewLabels(printedCartons.map((carton) => normalizeId(carton.id)))} disabled={!printedCartons.length}>Nyomtatottak előnézete</button>
           </>
         }
       />
 
       {previewIds ? (
-        <section className="card print-hide">
+        <section className="card print-hide preview-card" ref={previewRef}>
           <div className="card-title-row">
             <h2>Előnézet ({previewCartons.length})</h2>
             <div className="inline">
@@ -188,8 +208,8 @@ function CartonTable({
   cartons: Carton[];
   selectedIds: number[];
   toolbar: ReactNode;
-  onToggle: (id: number) => void;
-  onPreview: (id: number) => void;
+  onToggle: (id: number | string) => void;
+  onPreview: (id: number | string) => void;
 }) {
   return (
     <section className="card print-hide">
