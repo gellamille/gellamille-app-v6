@@ -9,3 +9,4 @@ npm-debug.log*
 .codex-npm-cache
 .node_modules.partial.*
 *.tsbuildinfo
+.env.local
