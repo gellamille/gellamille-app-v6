@@ -23,7 +23,7 @@ type ProcessedEmail = {
 function emailDeliveryMode(): EmailDeliveryMode {
   const value = process.env.EMAIL_DELIVERY_MODE;
   if (value === "disabled" || value === "dry_run" || value === "live") return value;
-  if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) return "live";
+  if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM && process.env.RESEND_API_URL) return "live";
   return "disabled";
 }
 
@@ -34,7 +34,10 @@ function emailProvider(): EmailProvider {
 function missingEmailConfig() {
   const missing: string[] = [];
   if (!process.env.EMAIL_FROM) missing.push("EMAIL_FROM");
-  if (emailDeliveryMode() === "live" && !process.env.RESEND_API_KEY) missing.push("RESEND_API_KEY");
+  if (emailDeliveryMode() === "live") {
+    if (!process.env.RESEND_API_KEY) missing.push("RESEND_API_KEY");
+    if (!process.env.RESEND_API_URL) missing.push("RESEND_API_URL");
+  }
   return missing;
 }
 
@@ -61,6 +64,7 @@ export function emailRuntimeStatus() {
     provider: emailProvider(),
     fromConfigured: Boolean(process.env.EMAIL_FROM),
     apiKeyConfigured: Boolean(process.env.RESEND_API_KEY),
+    apiUrlConfigured: Boolean(process.env.RESEND_API_URL),
     missing
   };
 }
@@ -68,9 +72,10 @@ export function emailRuntimeStatus() {
 async function sendWithResend(item: EmailOutboxRow) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) throw new Error(`Hiányzó e-mail konfiguráció: ${missingEmailConfig().join(", ")}`);
+  const apiUrl = process.env.RESEND_API_URL;
+  if (!apiKey || !from || !apiUrl) throw new Error(`Hiányzó e-mail konfiguráció: ${missingEmailConfig().join(", ")}`);
 
-  const response = await fetch("https://api.resend.com/emails", {
+  const response = await fetch(apiUrl, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({

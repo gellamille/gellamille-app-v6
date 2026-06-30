@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = process.cwd();
-const productionUrl = process.env.RELEASE_CHECK_URL || "https://gellamille-app-v6.vercel.app";
 const requiredEnv = [
   "DATABASE_URL",
   "NEXT_PUBLIC_SUPABASE_URL",
@@ -13,6 +12,7 @@ const requiredEnv = [
 ];
 const optionalEmailEnv = [
   "RESEND_API_KEY",
+  "RESEND_API_URL",
   "EMAIL_FROM",
   "EMAIL_DELIVERY_MODE"
 ];
@@ -107,6 +107,18 @@ function checkMigrations() {
 }
 
 async function checkHealth() {
+  const dotEnv = loadDotEnvValues();
+  const productionUrl = process.env.RELEASE_CHECK_URL
+    || process.env.APP_URL
+    || dotEnv.get("RELEASE_CHECK_URL")
+    || dotEnv.get("APP_URL")
+    || "";
+
+  if (!productionUrl) {
+    fail("/api/health", "Missing RELEASE_CHECK_URL or APP_URL.");
+    return;
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {

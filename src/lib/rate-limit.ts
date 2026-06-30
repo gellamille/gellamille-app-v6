@@ -41,7 +41,10 @@ export function requestIp(request: Request) {
 }
 
 export function rateLimitKey(value: string) {
-  const salt = process.env.RATE_LIMIT_SALT || process.env.CRON_SECRET || "gellamille-rate-limit";
+  const salt = process.env.RATE_LIMIT_SALT || process.env.CRON_SECRET;
+  if (!salt) {
+    throw new Error("A RATE_LIMIT_SALT vagy CRON_SECRET környezeti változó hiányzik.");
+  }
   return crypto.createHash("sha256").update(`${salt}:${value}`).digest("hex");
 }
 
@@ -54,6 +57,11 @@ export function rateLimitResponse(retryAfter: number) {
 
 export async function checkRateLimit(options: RateLimitOptions) {
   try {
+    if (!process.env.RATE_LIMIT_SALT && !process.env.CRON_SECRET) {
+      logWarning("rate_limit.disabled_missing_salt", { scope: options.scope });
+      return { allowed: true, attempts: 0, retryAfterSeconds: 0 };
+    }
+
     const rows = await query<{ attempts: number; retry_after_seconds: number }>(`
       with upserted as (
         insert into public.rate_limit_counters(scope,identifier_hash,window_start,window_seconds,attempts)
