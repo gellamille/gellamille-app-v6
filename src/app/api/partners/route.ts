@@ -373,15 +373,34 @@ export async function DELETE(request: Request) {
 
       const archived = await client.query<any>(`
         update public.partners
-           set active=false, archived_at=now(), note=concat_ws(E'\n', note, $3)
+           set active=false, archived_at=now(), note=concat_ws(E'\n', note, $3::text)
          where id=$1 and organization_id=$2 and archived_at is null
          returning *
       `, [input.id, user.organization_id, `Archiválva: ${input.reason.trim()}`]);
 
-      await client.query(`update public.app_users set active=false where role='partner' and partner_id=$1`, [input.id]);
-      await client.query(`update public.partner_addresses set active=false where partner_id=$1`, [input.id]);
-      await client.query(`update public.partner_contacts set active=false where partner_id=$1`, [input.id]);
-      await client.query(`update public.partner_delivery_days set active=false where partner_id=$1`, [input.id]);
+      await client.query(`
+        update public.app_users
+           set active=false
+         where role='partner' and partner_id=$1 and organization_id=$2
+      `, [input.id, user.organization_id]);
+      await client.query(`
+        update public.partner_addresses
+           set active=false
+         where partner_id=$1
+           and exists(select 1 from public.partners p where p.id=public.partner_addresses.partner_id and p.organization_id=$2)
+      `, [input.id, user.organization_id]);
+      await client.query(`
+        update public.partner_contacts
+           set active=false
+         where partner_id=$1
+           and exists(select 1 from public.partners p where p.id=public.partner_contacts.partner_id and p.organization_id=$2)
+      `, [input.id, user.organization_id]);
+      await client.query(`
+        update public.partner_delivery_days
+           set active=false
+         where partner_id=$1
+           and exists(select 1 from public.partners p where p.id=public.partner_delivery_days.partner_id and p.organization_id=$2)
+      `, [input.id, user.organization_id]);
       await client.query(`
         insert into public.audit_log(actor_user_id,action,entity_type,entity_id,before_data,after_data)
         values($1,'partner.archived','partner',$2,$3::jsonb,$4::jsonb)

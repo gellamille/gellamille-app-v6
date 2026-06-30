@@ -90,6 +90,12 @@ describe("kritikus API jogosultsagi es folyamat invariantok", () => {
     assertContains(file, "where user_id=$1 and organization_id=$2 and active=true and role<>'partner'");
   });
 
+  it("partner archive uses typed note parameter and organization scoped login deactivation", () => {
+    const file = "src/app/api/partners/route.ts";
+    assertContains(file, "note=concat_ws(E'\\n', note, $3::text)");
+    assertContains(file, "where role='partner' and partner_id=$1 and organization_id=$2");
+  });
+
   it("shipment create and edit modify only own organization orders and deliveries", () => {
     assertContains("src/app/api/shipments/route.ts", "where id=$1 and organization_id=$2 and archived_at is null");
     assertContains("src/app/api/shipments/route.ts", "where id=$1 and organization_id=$7");
